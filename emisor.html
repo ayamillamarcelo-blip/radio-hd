@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Emisor HD Pro - Audio de Línea</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            padding: 20px; 
+            background: #121212; 
+            color: #e0e0e0; 
+            display: flex; 
+            justify-content: center; 
+        }
+        .card { 
+            background: #1e1e1e; 
+            padding: 25px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            width: 100%; 
+            max-width: 450px; 
+            border: 1px solid #333; 
+        }
+        h2 { color: #4CAF50; margin-top: 0; text-align: center; }
+        label { display: block; margin-top: 15px; font-size: 0.9em; color: #888; }
+        
+        select, input, button { 
+            margin: 10px 0; 
+            padding: 12px; 
+            display: block; 
+            width: 100%; 
+            border-radius: 8px; 
+            border: 1px solid #444; 
+            background: #2d2d2d; 
+            color: white; 
+            font-size: 14px; 
+            box-sizing: border-box;
+        }
+
+        button { 
+            cursor: pointer; 
+            font-weight: bold; 
+            border: none; 
+            text-transform: uppercase; 
+            transition: 0.3s;
+        }
+
+        .btn-monitor { background-color: #444; color: #ccc; }
+        .btn-monitor.active { background-color: #ff9800; color: white; }
+        .btn-conectar { background-color: #4CAF50; color: white; margin-top: 20px; }
+        .btn-conectar:hover { background-color: #45a049; }
+
+        #vu-meter { 
+            width: 100%; 
+            height: 15px; 
+            background: #000; 
+            border-radius: 3px; 
+            margin: 15px 0; 
+            border: 1px solid #444;
+            box-shadow: inset 0 0 5px #000;
+            overflow: hidden;
+        }
+
+        #vu-bar { 
+            width: 0%; 
+            height: 100%; 
+            background: #4CAF50; 
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+            transition: width 0.05s ease-out;
+        }
+
+        .id-container {
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 1px dashed #444;
+        }
+        #mi-id { font-family: monospace; color: #00ff00; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Transmisor de Línea HD</h2>
+        
+        <div class="id-container">
+            <span style="font-size: 0.8em; color: #666;">TU ID DE EMISOR</span><br>
+            <span id="mi-id">Conectando...</span>
+        </div>
+
+        <label>1. SELECCIONA ENTRADA (CONSOLA/LÍNEA):</label>
+        <select id="lista-dispositivos" onchange="cambiarEntrada()"></select>
+        
+        <div id="vu-meter"><div id="vu-bar"></div></div>
+        
+        <button id="btn-mon" class="btn-monitor" onclick="toggleMonitor(event)">🎧 Escuchar Monitoreo</button>
+
+        <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
+
+        <label>2. ID DEL RECEPTOR:</label>
+        <input type="text" id="id-receptor" placeholder="Pega aquí el ID del receptor">
+        <button class="btn-conectar" onclick="iniciarTransmision()">🚀 Iniciar Transmisión HD</button>
+    </div>
+
+    <audio id="audio-monitor" muted></audio>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script>
+        const peer = new Peer();
+        const selector = document.getElementById('lista-dispositivos');
+        const audioMonitor = document.getElementById('audio-monitor');
+        const vuBar = document.getElementById('vu-bar');
+        const miIdDisplay = document.getElementById('mi-id');
+        let localStream;
+
+        // 1. Obtener ID de PeerJS
+        peer.on('open', id => {
+            miIdDisplay.innerText = id;
+        });
+
+        // 2. Inicializar Dispositivos
+        async function inicializar() {
+            try {
+                // Pedir permiso primero para obtener etiquetas de nombres
+                const streamInicial = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const dispositivos = await navigator.mediaDevices.enumerateDevices();
+                
+                selector.innerHTML = ""; 
+                dispositivos.filter(d => d.kind === 'audioinput').forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || `Entrada ${selector.length + 1}`;
+                    selector.appendChild(opt);
+                });
+
+                streamInicial.getTracks().forEach(t => t.stop()); // Liberar cámara/mic inicial
+                obtenerStream(); 
+            } catch (err) { 
+                alert("Error: Debes permitir el acceso al micrófono para transmitir."); 
+            }
+        }
+
+        // 3. Capturar Audio de la Entrada Seleccionada
+        async function obtenerStream() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+
+            const constraints = {
+                audio: {
+                    deviceId: selector.value ? { exact: selector.value } : undefined,
+                    echoCancellation: false, 
+                    noiseSuppression: false, 
+                    autoGainControl: false, // Importante para música/consola
+                    channelCount: 2
+                }
+            };
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                activarVuMeter(localStream);
+            } catch (e) {
+                console.error("Error al capturar dispositivo:", e);
+            }
+        }
+
+        function cambiarEntrada() {
+            obtenerStream().then(() => {
+                if (!audioMonitor.muted) audioMonitor.srcObject = localStream;
+            });
+        }
+
+        // 4. Lógica del VU Meter Profesional
+        function activarVuMeter(stream) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(stream);
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.4;
+            source.connect(analyser);
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            function update() {
+                analyser.getByteFrequencyData(dataArray);
+                let values = 0;
+                for(let i=0; i<dataArray.length; i++) values += dataArray[i];
+                let average = values / dataArray.length;
+                
+                let volume = Math.min(average * 1.8, 100); 
+                vuBar.style.width = volume + "%";
+
+                // Colores según nivel
+                if (volume < 75) {
+                    vuBar.style.background = "#4CAF50"; // Verde
+                } else if (volume < 92) {
+                    vuBar.style.background = "#ffeb3b"; // Amarillo
+                } else {
+                    vuBar.style.background = "#f44336"; // Rojo (Saturación)
+                }
+                requestAnimationFrame(update);
+            }
+            update();
+        }
+
+        // 5. Función de Monitoreo
+        async function toggleMonitor(e) {
+            if (!localStream) await obtenerStream();
+            audioMonitor.srcObject = localStream;
+            audioMonitor.muted = !audioMonitor.muted;
+            
+            if (audioMonitor.muted) {
+                e.target.innerText = "🎧 Escuchar Monitoreo";
+                e.target.classList.remove('active');
+            } else {
+                e.target.innerText = "🔇 Detener Monitoreo";
+                e.target.classList.add('active');
+                audioMonitor.play();
+            }
+        }
+
+        // 6. Iniciar Transmisión con Bitrate Alto
+        function iniciarTransmision() {
+            const idDestino = document.getElementById('id-receptor').value.trim();
+            if (!idDestino) return alert("Por favor, pega el ID del receptor.");
+            
+            const opciones = {
+                sdpTransform: (sdp) => {
+                    // Fuerza el códec Opus a 256kbps y estéreo
+                    return sdp.replace('useinbandfec=1', 'useinbandfec=1; maxaveragebitrate=256000; stereo=1; sprop-stereo=1');
+                }
+            };
+            
+            const call = peer.call(idDestino, localStream, opciones);
+            
+            call.on('error', err => {
+                alert("Error en la conexión: " + err.type);
+            });
+
+            alert("🚀 Transmitiendo audio HD al receptor...");
+        }
+
+        // Iniciar al cargar la página
+        inicializar();
+    </script>
+</body>
+</html>

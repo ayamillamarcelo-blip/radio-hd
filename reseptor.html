@@ -1,0 +1,181 @@
+HTML
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Receptor HD Pro - Monitor de Señal</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: #0d1117; 
+            color: #c9d1d9; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0;
+        }
+        .card { 
+            background: #161b22; 
+            padding: 30px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.7); 
+            text-align: center; 
+            width: 100%; 
+            max-width: 400px; 
+            border: 1px solid #30363d;
+        }
+        h2 { color: #58a6ff; margin-bottom: 5px; }
+        .status { font-size: 0.9em; color: #8b949e; margin-bottom: 20px; }
+        
+        .id-box { 
+            background: #010409; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 1px solid #30363d;
+            margin: 20px 0;
+        }
+        #peer-id { 
+            font-family: 'Courier New', monospace; 
+            color: #39ff14; 
+            font-size: 1.2em; 
+            letter-spacing: 2px;
+            display: block;
+            margin-top: 5px;
+        }
+
+        #vu-meter { 
+            width: 100%; 
+            height: 20px; 
+            background: #000; 
+            border-radius: 4px; 
+            margin: 20px 0; 
+            border: 1px solid #444;
+            overflow: hidden;
+            box-shadow: inset 0 0 10px #000;
+        }
+        #vu-bar { 
+            width: 0%; 
+            height: 100%; 
+            background: #4CAF50; 
+            transition: width 0.05s ease-out;
+        }
+
+        .led {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #333;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .led-on { background: #ff3e3e; box-shadow: 0 0 10px #ff3e3e; }
+
+        .instrucciones { font-size: 0.8em; color: #484f58; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div id="led-indicator" class="led"></div>
+        <span id="txt-status">ESPERANDO SEÑAL...</span>
+        
+        <h2>Receptor HD</h2>
+        <p class="status">Pega este ID en tu Emisor</p>
+
+        <div class="id-box">
+            <span id="peer-id">Generando...</span>
+        </div>
+
+        <div id="vu-meter"><div id="vu-bar"></div></div>
+
+        <audio id="remote-audio" autoplay></audio>
+
+        <p class="instrucciones">Nota: Haz clic en cualquier parte de esta ventana al abrirla para habilitar el audio.</p>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script>
+        const peer = new Peer();
+        const audioRemote = document.getElementById('remote-audio');
+        const vuBar = document.getElementById('vu-bar');
+        const statusTxt = document.getElementById('txt-status');
+        const led = document.getElementById('led-indicator');
+
+        // 1. Mostrar ID al abrir
+        peer.on('open', id => {
+            document.getElementById('peer-id').innerText = id;
+        });
+
+        // 2. Gestionar la llamada entrante
+        peer.on('call', call => {
+            call.answer(); // Aceptar la llamada
+            
+            call.on('stream', remoteStream => {
+                // Conectar el audio al elemento HTML
+                audioRemote.srcObject = remoteStream;
+                audioRemote.play();
+
+                // Cambiar estado visual
+                statusTxt.innerText = "¡EN EL AIRE!";
+                statusTxt.style.color = "#ff3e3e";
+                led.classList.add('led-on');
+
+                // Iniciar Vúmetro con el stream recibido
+                activarVuMeter(remoteStream);
+            });
+
+            call.on('close', () => {
+                statusTxt.innerText = "CONEXIÓN CERRADA";
+                led.classList.remove('led-on');
+                vuBar.style.width = "0%";
+            });
+        });
+
+        // 3. Lógica del Vúmetro para el Receptor
+        function activarVuMeter(stream) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(stream);
+            const analyser = audioContext.createAnalyser();
+            
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.4;
+            source.connect(analyser);
+            
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            function update() {
+                analyser.getByteFrequencyData(dataArray);
+                let values = 0;
+                for(let i=0; i < dataArray.length; i++) values += dataArray[i];
+                let average = values / dataArray.length;
+                
+                // Sensibilidad ajustada para recepción
+                let volume = Math.min(average * 2.2, 100); 
+                vuBar.style.width = volume + "%";
+
+                // Colores dinámicos
+                if (volume < 75) {
+                    vuBar.style.background = "#4CAF50"; 
+                } else if (volume < 90) {
+                    vuBar.style.background = "#ffeb3b"; 
+                } else {
+                    vuBar.style.background = "#f44336"; 
+                }
+                
+                // Si la conexión sigue activa, continuar animando
+                if (statusTxt.innerText === "¡EN EL AIRE!") {
+                    requestAnimationFrame(update);
+                }
+            }
+            update();
+        }
+
+        // Manejo de errores de conexión
+        peer.on('error', err => {
+            console.error(err);
+            alert("Error de conexión: " + err.type);
+        });
+    </script>
+</body>
+</html>
