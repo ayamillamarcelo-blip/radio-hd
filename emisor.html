@@ -2,205 +2,129 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Emisor HD Pro - Stereo Edition</title>
+    <title>Receptor HD Pro - Monitor & Grabación</title>
     <style>
         body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            padding: 20px; 
-            background: #121212; 
-            color: #e0e0e0; 
+            font-family: 'Segoe UI', sans-serif; 
+            background: #0d1117; 
+            color: #c9d1d9; 
             display: flex; 
             justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0;
         }
         .card { 
-            background: #1e1e1e; 
-            padding: 25px; 
+            background: #161b22; 
+            padding: 30px; 
             border-radius: 15px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.7); 
+            text-align: center; 
             width: 100%; 
-            max-width: 450px; 
-            border: 1px solid #333; 
+            max-width: 420px; 
+            border: 1px solid #30363d;
         }
-        h2 { color: #4CAF50; margin-top: 0; text-align: center; }
-        label { display: block; margin-top: 15px; font-size: 0.9em; color: #888; }
+        .status-container { margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; }
         
-        select, input, button { 
-            margin: 10px 0; 
-            padding: 12px; 
-            display: block; 
-            width: 100%; 
-            border-radius: 8px; 
-            border: 1px solid #444; 
-            background: #2d2d2d; 
-            color: white; 
-            font-size: 14px; 
-            box-sizing: border-box;
-        }
-
-        button { 
-            cursor: pointer; 
-            font-weight: bold; 
-            border: none; 
-            text-transform: uppercase; 
-            transition: 0.3s;
-        }
-
-        .btn-monitor { background-color: #444; color: #ccc; }
-        .btn-monitor.active { background-color: #ff9800; color: white; }
-        .btn-conectar { background-color: #4CAF50; color: white; margin-top: 20px; }
-        .btn-conectar:hover { background-color: #45a049; }
-
-        .vu-container {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            margin: 15px 0;
-        }
-        .vu-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .vu-label { font-size: 10px; color: #666; width: 15px; }
-        .vu-meter-bg { 
-            flex-grow: 1;
-            height: 12px; 
-            background: #000; 
-            border-radius: 3px; 
-            border: 1px solid #333;
-            overflow: hidden;
-            position: relative;
-        }
-        .vu-bar { 
-            width: 0%; 
-            height: 100%; 
-            background: #4CAF50; 
-            transition: width 0.05s ease-out;
-        }
-
-        .id-container {
-            background: #000;
+        #peer-id { 
+            font-family: 'Courier New', monospace; 
+            color: #39ff14; 
+            background: #010409;
             padding: 10px;
             border-radius: 5px;
-            text-align: center;
-            margin-bottom: 20px;
-            border: 1px dashed #444;
+            display: block;
+            margin: 10px 0;
+            border: 1px solid #30363d;
         }
-        #mi-id { font-family: monospace; color: #00ff00; font-weight: bold; }
+
+        /* --- VUMETRO ESTEREO --- */
+        .vu-container { display: flex; flex-direction: column; gap: 8px; margin: 20px 0; }
+        .vu-row { display: flex; align-items: center; gap: 10px; }
+        .vu-label { font-size: 10px; color: #8b949e; width: 15px; }
+        .vu-bg { flex-grow: 1; height: 14px; background: #000; border-radius: 3px; overflow: hidden; border: 1px solid #333; }
+        .vu-bar { width: 0%; height: 100%; background: #4CAF50; transition: width 0.05s ease-out; }
+
+        .led { width: 12px; height: 12px; background: #333; border-radius: 50%; }
+        .led-on { background: #ff3e3e; box-shadow: 0 0 10px #ff3e3e; }
+
+        button {
+            width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: none;
+            font-weight: bold; cursor: pointer; text-transform: uppercase; transition: 0.3s;
+        }
+        .btn-record { background: #444; color: white; }
+        .btn-record.recording { background: #f44336; animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2>Transmisor Stereo HD</h2>
-        
-        <div class="id-container">
-            <span style="font-size: 0.8em; color: #666;">TU ID DE EMISOR</span><br>
-            <span id="mi-id">Conectando...</span>
+        <div class="status-container">
+            <div id="led-indicator" class="led"></div>
+            <span id="txt-status">ESPERANDO SEÑAL HD...</span>
         </div>
-
-        <label>1. SELECCIONA ENTRADA (CONSOLA/LÍNEA):</label>
-        <select id="lista-dispositivos" onchange="cambiarEntrada()"></select>
         
+        <span id="peer-id">Generando ID...</span>
+
         <div class="vu-container">
-            <div class="vu-wrapper">
+            <div class="vu-row">
                 <span class="vu-label">L</span>
-                <div class="vu-meter-bg"><div id="vu-L" class="vu-bar"></div></div>
+                <div class="vu-bg"><div id="vu-L" class="vu-bar"></div></div>
             </div>
-            <div class="vu-wrapper">
+            <div class="vu-row">
                 <span class="vu-label">R</span>
-                <div class="vu-meter-bg"><div id="vu-R" class="vu-bar"></div></div>
+                <div class="vu-bg"><div id="vu-R" class="vu-bar"></div></div>
             </div>
         </div>
+
+        <button id="btn-grab" class="btn-record" onclick="toggleRecording()">⏺ Iniciar Grabación</button>
         
-        <button id="btn-mon" class="btn-monitor" onclick="toggleMonitor(event)">🎧 Escuchar Monitoreo</button>
-
-        <hr style="border: 0; border-top: 1px solid #333; margin: 25px 0;">
-
-        <label>2. ID DEL RECEPTOR:</label>
-        <input type="text" id="id-receptor" placeholder="Pega aquí el ID del receptor">
-        <button class="btn-conectar" onclick="iniciarTransmision()">🚀 Iniciar Transmisión HD</button>
+        <audio id="remote-audio" autoplay></audio>
+        <p style="font-size: 0.7em; color: #484f58; margin-top: 15px;">Haz clic en cualquier lugar para habilitar audio si no escuchas nada.</p>
     </div>
-
-    <audio id="audio-monitor" muted></audio>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
         const peer = new Peer();
-        const selector = document.getElementById('lista-dispositivos');
-        const audioMonitor = document.getElementById('audio-monitor');
-        const miIdDisplay = document.getElementById('mi-id');
+        const audioRemote = document.getElementById('remote-audio');
+        const statusTxt = document.getElementById('txt-status');
+        const led = document.getElementById('led-indicator');
+        const btnGrab = document.getElementById('btn-grab');
         
-        const barL = document.getElementById('vu-L');
-        const barR = document.getElementById('vu-R');
+        let mediaRecorder;
+        let recordedChunks = [];
+        let streamActivo;
 
-        let localStream;
-        let audioCtx;
-        let animationId;
+        peer.on('open', id => { document.getElementById('peer-id').innerText = id; });
 
-        peer.on('open', id => { miIdDisplay.innerText = id; });
-
-        async function inicializar() {
-            try {
-                // Pedimos permiso inicial
-                const streamInicial = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const dispositivos = await navigator.mediaDevices.enumerateDevices();
-                
-                selector.innerHTML = ""; 
-                dispositivos.filter(d => d.kind === 'audioinput').forEach(d => {
-                    const opt = document.createElement('option');
-                    opt.value = d.deviceId;
-                    opt.text = d.label || `Entrada ${selector.length + 1}`;
-                    selector.appendChild(opt);
-                });
-
-                streamInicial.getTracks().forEach(t => t.stop());
-                obtenerStream(); 
-            } catch (err) { 
-                alert("Error: Debes permitir el acceso al micrófono."); 
-            }
-        }
-
-        async function obtenerStream() {
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
-
-            // Configuración para Audio Puro (Sin filtros de chat de voz)
-            const constraints = {
-                audio: {
-                    deviceId: selector.value ? { exact: selector.value } : undefined,
-                    echoCancellation: false, 
-                    noiseSuppression: false, 
-                    autoGainControl: false,
-                    channelCount: 2, // Solicitar 2 canales
-                    sampleRate: 48000 // Sugerir 48kHz al hardware
+        peer.on('call', call => {
+            const opcionesRespuesta = {
+                sdpTransform: (sdp) => {
+                    return sdp.replace('useinbandfec=1', 'useinbandfec=1; stereo=1; maxaveragebitrate=256000; sprop-stereo=1');
                 }
             };
 
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                activarVuMeterStereo(localStream);
-            } catch (e) {
-                console.error("Error al capturar dispositivo:", e);
-            }
-        }
+            call.answer(null, opcionesRespuesta); 
+            
+            call.on('stream', remoteStream => {
+                streamActivo = remoteStream;
+                audioRemote.srcObject = remoteStream;
+                
+                statusTxt.innerText = "¡EN EL AIRE!";
+                statusTxt.style.color = "#ff3e3e";
+                led.classList.add('led-on');
 
-        function cambiarEntrada() {
-            obtenerStream().then(() => {
-                if (!audioMonitor.muted) audioMonitor.srcObject = localStream;
+                activarVumetroEstereo(remoteStream);
             });
-        }
+        });
 
-        function activarVuMeterStereo(stream) {
-            if (audioCtx) audioCtx.close();
-            if (animationId) cancelAnimationFrame(animationId);
-
-            // MEJORA: Forzamos el procesamiento interno a 48kHz
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: 48000
-            });
-
+        function activarVumetroEstereo(stream) {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
             const source = audioCtx.createMediaStreamSource(stream);
             const splitter = audioCtx.createChannelSplitter(2);
             source.connect(splitter);
@@ -215,66 +139,62 @@
             const dataL = new Uint8Array(analyserL.frequencyBinCount);
             const dataR = new Uint8Array(analyserR.frequencyBinCount);
 
-            function update() {
+            function draw() {
+                if (statusTxt.innerText !== "¡EN EL AIRE!") return;
+                
                 analyserL.getByteFrequencyData(dataL);
                 analyserR.getByteFrequencyData(dataR);
 
-                const getVol = (data) => {
+                const calcularVol = (data) => {
                     let sum = 0;
                     for(let i=0; i<data.length; i++) sum += data[i];
-                    return Math.min((sum / data.length) * 1.8, 100);
+                    return Math.min((sum / data.length) * 2, 100);
                 };
 
-                actualizarBarra(barL, getVol(dataL));
-                actualizarBarra(barR, getVol(dataR));
-
-                animationId = requestAnimationFrame(update);
+                actualizarBarra('vu-L', calcularVol(dataL));
+                actualizarBarra('vu-R', calcularVol(dataR));
+                
+                requestAnimationFrame(draw);
             }
 
-            function actualizarBarra(bar, volume) {
-                bar.style.width = volume + "%";
-                if (volume < 75) bar.style.background = "#4CAF50";
-                else if (volume < 92) bar.style.background = "#ffeb3b";
+            function actualizarBarra(id, vol) {
+                const bar = document.getElementById(id);
+                bar.style.width = vol + "%";
+                if (vol < 75) bar.style.background = "#4CAF50";
+                else if (vol < 90) bar.style.background = "#ffeb3b";
                 else bar.style.background = "#f44336";
             }
-            update();
+            draw();
         }
 
-        async function toggleMonitor(e) {
-            if (!localStream) await obtenerStream();
-            audioMonitor.srcObject = localStream;
-            audioMonitor.muted = !audioMonitor.muted;
-            
-            if (audioMonitor.muted) {
-                e.target.innerText = "🎧 Escuchar Monitoreo";
-                e.target.classList.remove('active');
+        function toggleRecording() {
+            if (!streamActivo) return alert("Espera a recibir señal para grabar.");
+
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                btnGrab.innerText = "⏺ Iniciar Grabación";
+                btnGrab.classList.remove('recording');
             } else {
-                e.target.innerText = "🔇 Detener Monitoreo";
-                e.target.classList.add('active');
-                audioPlayerTrigger();
+                recordedChunks = [];
+                // Graba en alta calidad
+                mediaRecorder = new MediaRecorder(streamActivo, { mimeType: 'audio/webm;codecs=opus' });
+                
+                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `grabacion-hd-${Date.now()}.webm`;
+                    a.click();
+                };
+
+                mediaRecorder.start();
+                btnGrab.innerText = "🛑 Detener Grabación";
+                btnGrab.classList.add('recording');
             }
         }
-
-        function audioPlayerTrigger() {
-            audioMonitor.play().catch(e => console.log("Esperando interacción..."));
-        }
-
-        function iniciarTransmision() {
-            const idDestino = document.getElementById('id-receptor').value.trim();
-            if (!idDestino) return alert("Por favor, pega el ID del receptor.");
-            
-            const opciones = {
-                sdpTransform: (sdp) => {
-                    // FORZAR ESTÉREO Y ALTO BITRATE (256kbps)
-                    return sdp.replace('useinbandfec=1', 'useinbandfec=1; maxaveragebitrate=256000; stereo=1; sprop-stereo=1');
-                }
-            };
-            
-            peer.call(idDestino, localStream, opciones);
-            alert("🚀 Transmitiendo Audio Stereo HD (48kHz / 256kbps)...");
-        }
-
-        inicializar();
     </script>
 </body>
 </html>
