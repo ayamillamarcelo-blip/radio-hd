@@ -1,9 +1,8 @@
-HTML
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Receptor HD Pro - Monitor de Señal</title>
+    <title>Receptor HD Pro - Monitor & Grabación</title>
     <style>
         body { 
             font-family: 'Segoe UI', sans-serif; 
@@ -22,160 +21,180 @@ HTML
             box-shadow: 0 10px 40px rgba(0,0,0,0.7); 
             text-align: center; 
             width: 100%; 
-            max-width: 400px; 
+            max-width: 420px; 
             border: 1px solid #30363d;
         }
-        h2 { color: #58a6ff; margin-bottom: 5px; }
-        .status { font-size: 0.9em; color: #8b949e; margin-bottom: 20px; }
+        .status-container { margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; }
         
-        .id-box { 
-            background: #010409; 
-            padding: 15px; 
-            border-radius: 8px; 
-            border: 1px solid #30363d;
-            margin: 20px 0;
-        }
         #peer-id { 
             font-family: 'Courier New', monospace; 
             color: #39ff14; 
-            font-size: 1.2em; 
-            letter-spacing: 2px;
+            background: #010409;
+            padding: 10px;
+            border-radius: 5px;
             display: block;
-            margin-top: 5px;
+            margin: 10px 0;
+            border: 1px solid #30363d;
         }
 
-        #vu-meter { 
-            width: 100%; 
-            height: 20px; 
-            background: #000; 
-            border-radius: 4px; 
-            margin: 20px 0; 
-            border: 1px solid #444;
-            overflow: hidden;
-            box-shadow: inset 0 0 10px #000;
-        }
-        #vu-bar { 
-            width: 0%; 
-            height: 100%; 
-            background: #4CAF50; 
-            transition: width 0.05s ease-out;
-        }
+        /* --- VUMETRO ESTEREO --- */
+        .vu-container { display: flex; flex-direction: column; gap: 8px; margin: 20px 0; }
+        .vu-row { display: flex; align-items: center; gap: 10px; }
+        .vu-label { font-size: 10px; color: #8b949e; width: 15px; }
+        .vu-bg { flex-grow: 1; height: 14px; background: #000; border-radius: 3px; overflow: hidden; border: 1px solid #333; }
+        .vu-bar { width: 0%; height: 100%; background: #4CAF50; transition: width 0.05s ease-out; }
 
-        .led {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            background: #333;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
+        .led { width: 12px; height: 12px; background: #333; border-radius: 50%; }
         .led-on { background: #ff3e3e; box-shadow: 0 0 10px #ff3e3e; }
 
-        .instrucciones { font-size: 0.8em; color: #484f58; margin-top: 20px; }
+        button {
+            width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: none;
+            font-weight: bold; cursor: pointer; text-transform: uppercase; transition: 0.3s;
+        }
+        .btn-record { background: #444; color: white; }
+        .btn-record.recording { background: #f44336; animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <div id="led-indicator" class="led"></div>
-        <span id="txt-status">ESPERANDO SEÑAL...</span>
+        <div class="status-container">
+            <div id="led-indicator" class="led"></div>
+            <span id="txt-status">ESPERANDO SEÑAL HD...</span>
+        </div>
         
-        <h2>Receptor HD</h2>
-        <p class="status">Pega este ID en tu Emisor</p>
+        <span id="peer-id">Generando ID...</span>
 
-        <div class="id-box">
-            <span id="peer-id">Generando...</span>
+        <div class="vu-container">
+            <div class="vu-row">
+                <span class="vu-label">L</span>
+                <div class="vu-bg"><div id="vu-L" class="vu-bar"></div></div>
+            </div>
+            <div class="vu-row">
+                <span class="vu-label">R</span>
+                <div class="vu-bg"><div id="vu-R" class="vu-bar"></div></div>
+            </div>
         </div>
 
-        <div id="vu-meter"><div id="vu-bar"></div></div>
-
+        <button id="btn-grab" class="btn-record" onclick="toggleRecording()">⏺ Iniciar Grabación</button>
+        
         <audio id="remote-audio" autoplay></audio>
-
-        <p class="instrucciones">Nota: Haz clic en cualquier parte de esta ventana al abrirla para habilitar el audio.</p>
+        <p style="font-size: 0.7em; color: #484f58; margin-top: 15px;">Haz clic en cualquier lugar para habilitar audio si no escuchas nada.</p>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
         const peer = new Peer();
         const audioRemote = document.getElementById('remote-audio');
-        const vuBar = document.getElementById('vu-bar');
         const statusTxt = document.getElementById('txt-status');
         const led = document.getElementById('led-indicator');
+        const btnGrab = document.getElementById('btn-grab');
+        
+        let mediaRecorder;
+        let recordedChunks = [];
+        let streamActivo;
 
-        // 1. Mostrar ID al abrir
-        peer.on('open', id => {
-            document.getElementById('peer-id').innerText = id;
-        });
+        peer.on('open', id => { document.getElementById('peer-id').innerText = id; });
 
-        // 2. Gestionar la llamada entrante
         peer.on('call', call => {
-            call.answer(); // Aceptar la llamada
+            const opcionesRespuesta = {
+                sdpTransform: (sdp) => {
+                    return sdp.replace('useinbandfec=1', 'useinbandfec=1; stereo=1; maxaveragebitrate=256000; sprop-stereo=1');
+                }
+            };
+
+            call.answer(null, opcionesRespuesta); 
             
             call.on('stream', remoteStream => {
-                // Conectar el audio al elemento HTML
+                streamActivo = remoteStream;
                 audioRemote.srcObject = remoteStream;
-                audioRemote.play();
-
-                // Cambiar estado visual
+                
                 statusTxt.innerText = "¡EN EL AIRE!";
                 statusTxt.style.color = "#ff3e3e";
                 led.classList.add('led-on');
 
-                // Iniciar Vúmetro con el stream recibido
-                activarVuMeter(remoteStream);
-            });
-
-            call.on('close', () => {
-                statusTxt.innerText = "CONEXIÓN CERRADA";
-                led.classList.remove('led-on');
-                vuBar.style.width = "0%";
+                activarVumetroEstereo(remoteStream);
             });
         });
 
-        // 3. Lógica del Vúmetro para el Receptor
-        function activarVuMeter(stream) {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioContext.createMediaStreamSource(stream);
-            const analyser = audioContext.createAnalyser();
-            
-            analyser.fftSize = 256;
-            analyser.smoothingTimeConstant = 0.4;
-            source.connect(analyser);
-            
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        function activarVumetroEstereo(stream) {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+            const source = audioCtx.createMediaStreamSource(stream);
+            const splitter = audioCtx.createChannelSplitter(2);
+            source.connect(splitter);
 
-            function update() {
-                analyser.getByteFrequencyData(dataArray);
-                let values = 0;
-                for(let i=0; i < dataArray.length; i++) values += dataArray[i];
-                let average = values / dataArray.length;
-                
-                // Sensibilidad ajustada para recepción
-                let volume = Math.min(average * 2.2, 100); 
-                vuBar.style.width = volume + "%";
+            const analyserL = audioCtx.createAnalyser();
+            const analyserR = audioCtx.createAnalyser();
+            analyserL.fftSize = analyserR.fftSize = 256;
 
-                // Colores dinámicos
-                if (volume < 75) {
-                    vuBar.style.background = "#4CAF50"; 
-                } else if (volume < 90) {
-                    vuBar.style.background = "#ffeb3b"; 
-                } else {
-                    vuBar.style.background = "#f44336"; 
-                }
+            splitter.connect(analyserL, 0); 
+            splitter.connect(analyserR, 1); 
+
+            const dataL = new Uint8Array(analyserL.frequencyBinCount);
+            const dataR = new Uint8Array(analyserR.frequencyBinCount);
+
+            function draw() {
+                if (statusTxt.innerText !== "¡EN EL AIRE!") return;
                 
-                // Si la conexión sigue activa, continuar animando
-                if (statusTxt.innerText === "¡EN EL AIRE!") {
-                    requestAnimationFrame(update);
-                }
+                analyserL.getByteFrequencyData(dataL);
+                analyserR.getByteFrequencyData(dataR);
+
+                const calcularVol = (data) => {
+                    let sum = 0;
+                    for(let i=0; i<data.length; i++) sum += data[i];
+                    return Math.min((sum / data.length) * 2, 100);
+                };
+
+                actualizarBarra('vu-L', calcularVol(dataL));
+                actualizarBarra('vu-R', calcularVol(dataR));
+                
+                requestAnimationFrame(draw);
             }
-            update();
+
+            function actualizarBarra(id, vol) {
+                const bar = document.getElementById(id);
+                bar.style.width = vol + "%";
+                if (vol < 75) bar.style.background = "#4CAF50";
+                else if (vol < 90) bar.style.background = "#ffeb3b";
+                else bar.style.background = "#f44336";
+            }
+            draw();
         }
 
-        // Manejo de errores de conexión
-        peer.on('error', err => {
-            console.error(err);
-            alert("Error de conexión: " + err.type);
-        });
+        function toggleRecording() {
+            if (!streamActivo) return alert("Espera a recibir señal para grabar.");
+
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                btnGrab.innerText = "⏺ Iniciar Grabación";
+                btnGrab.classList.remove('recording');
+            } else {
+                recordedChunks = [];
+                // Graba en alta calidad
+                mediaRecorder = new MediaRecorder(streamActivo, { mimeType: 'audio/webm;codecs=opus' });
+                
+                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `grabacion-hd-${Date.now()}.webm`;
+                    a.click();
+                };
+
+                mediaRecorder.start();
+                btnGrab.innerText = "🛑 Detener Grabación";
+                btnGrab.classList.add('recording');
+            }
+        }
     </script>
 </body>
 </html>
