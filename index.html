@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enlace de Audio Pro</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e1e2f 0%, #2d2d44 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2rem;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h1 { margin-bottom: 0.5rem; letter-spacing: 1px; }
+        p { color: #ccc; margin-bottom: 2rem; }
+        .buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .btn {
+            padding: 12px 25px;
+            font-weight: bold;
+            text-decoration: none;
+            color: white;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            display: inline-block;
+        }
+        .btn-emisor {
+            background: #ff4b2b;
+            background: linear-gradient(to right, #ff416c, #ff4b2b);
+        }
+        .btn-receptor {
+            background: #00b09b;
+            background: linear-gradient(to right, #96c93d, #00b09b);
+        }
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>🎙️ Enlace de Audio</h1>
+        <p>Selecciona tu rol en la transmisión</p>
+
+        <div class="buttons">
+            <button onclick="accesoEmisor()" class="btn btn-emisor">Panel Emisor</button>
+            <a href="receptor.html" class="btn btn-receptor">Entrar como Receptor</a>
+        </div>
+    </div>
+
+    <script>
+        function accesoEmisor() {
+            // Podés cambiar '1234' por la clave que quieras
+            const pass = prompt("Introduzca la clave de acceso para transmitir:");
+            
+            if (pass === "1234") {
+                window.location.href = "emisor.html";
+            } else if (pass !== null) {
+                alert("Clave incorrecta. Acceso denegado.");
+            }
+        }
+    </script>
+
+</body>
+</html>
