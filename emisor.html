@@ -2,7 +2,6 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Emisor HD Pro - Stereo Edition</title>
     <style>
         body { 
@@ -93,11 +92,11 @@
 <body>
 
     <div class="card">
-        <h2>🎙️ Transmisor Stereo HD</h2>
+        <h2>Transmisor Stereo HD</h2>
         
         <div class="id-container">
             <span style="font-size: 0.8em; color: #666;">TU ID DE EMISOR</span><br>
-            <span id="mi-id">Conectando al servidor...</span>
+            <span id="mi-id">Conectando...</span>
         </div>
 
         <label>1. SELECCIONA ENTRADA (CONSOLA/LÍNEA):</label>
@@ -126,16 +125,8 @@
     <audio id="audio-monitor" muted></audio>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    
     <script>
-        // CONFIGURACIÓN CRÍTICA PARA GITHUB PAGES (HTTPS)
-        const peer = new Peer(undefined, {
-            host: '0.peerjs.com',
-            port: 443,
-            secure: true,
-            debug: 1
-        });
-
+        const peer = new Peer();
         const selector = document.getElementById('lista-dispositivos');
         const audioMonitor = document.getElementById('audio-monitor');
         const miIdDisplay = document.getElementById('mi-id');
@@ -147,20 +138,11 @@
         let audioCtx;
         let animationId;
 
-        // Evento cuando el ID de emisor está listo
-        peer.on('open', id => { 
-            console.log("ID de Emisor listo:", id);
-            miIdDisplay.innerText = id; 
-        });
-
-        peer.on('error', err => {
-            console.error("Error en PeerJS:", err.type);
-            alert("Error de conexión: " + err.type);
-        });
+        peer.on('open', id => { miIdDisplay.innerText = id; });
 
         async function inicializar() {
             try {
-                // Pedimos permiso inicial al usuario
+                // Pedimos permiso inicial
                 const streamInicial = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const dispositivos = await navigator.mediaDevices.enumerateDevices();
                 
@@ -172,12 +154,10 @@
                     selector.appendChild(opt);
                 });
 
-                // Apagamos el stream temporal para iniciar el HD
                 streamInicial.getTracks().forEach(t => t.stop());
                 obtenerStream(); 
             } catch (err) { 
-                console.error("Fallo al inicializar:", err);
-                alert("Debes permitir el acceso al micrófono para transmitir."); 
+                alert("Error: Debes permitir el acceso al micrófono."); 
             }
         }
 
@@ -186,15 +166,15 @@
                 localStream.getTracks().forEach(track => track.stop());
             }
 
-            // Configuración de audio para ALTA CALIDAD
+            // Configuración para Audio Puro (Sin filtros de chat de voz)
             const constraints = {
                 audio: {
                     deviceId: selector.value ? { exact: selector.value } : undefined,
                     echoCancellation: false, 
                     noiseSuppression: false, 
                     autoGainControl: false,
-                    channelCount: 2, 
-                    sampleRate: 48000
+                    channelCount: 2, // Solicitar 2 canales
+                    sampleRate: 48000 // Sugerir 48kHz al hardware
                 }
             };
 
@@ -216,6 +196,7 @@
             if (audioCtx) audioCtx.close();
             if (animationId) cancelAnimationFrame(animationId);
 
+            // MEJORA: Forzamos el procesamiento interno a 48kHz
             audioCtx = new (window.AudioContext || window.webkitAudioContext)({
                 sampleRate: 48000
             });
@@ -270,30 +251,30 @@
             } else {
                 e.target.innerText = "🔇 Detener Monitoreo";
                 e.target.classList.add('active');
-                audioMonitor.play().catch(e => console.log("Interacción necesaria"));
+                audioPlayerTrigger();
             }
+        }
+
+        function audioPlayerTrigger() {
+            audioMonitor.play().catch(e => console.log("Esperando interacción..."));
         }
 
         function iniciarTransmision() {
             const idDestino = document.getElementById('id-receptor').value.trim();
             if (!idDestino) return alert("Por favor, pega el ID del receptor.");
             
-            // Forzamos el estéreo en el protocolo SDP
             const opciones = {
                 sdpTransform: (sdp) => {
+                    // FORZAR ESTÉREO Y ALTO BITRATE (256kbps)
                     return sdp.replace('useinbandfec=1', 'useinbandfec=1; maxaveragebitrate=256000; stereo=1; sprop-stereo=1');
                 }
             };
             
-            const call = peer.call(idDestino, localStream, opciones);
-            
-            if(call) {
-                alert("🚀 Transmitiendo Audio Stereo HD a: " + idDestino);
-            }
+            peer.call(idDestino, localStream, opciones);
+            alert("🚀 Transmitiendo Audio Stereo HD (48kHz / 256kbps)...");
         }
 
-        // Arrancamos al cargar la página
-        window.onload = inicializar;
+        inicializar();
     </script>
 </body>
 </html>
