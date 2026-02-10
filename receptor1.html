@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Receptor HD - Radio con Vúmetro</title>
+<title>Receptor HD - Vúmetro Lateral</title>
 
 <style>
     body {
@@ -10,7 +10,7 @@
         padding: 0;
         background: #0e0e0e;
         color: #e0e0e0;
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: Arial, sans-serif;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -19,67 +19,69 @@
 
     .card {
         background: #1b1b1b;
-        padding: 30px;
+        padding: 25px;
         border-radius: 15px;
         width: 100%;
-        max-width: 420px;
+        max-width: 450px;
         text-align: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         border: 1px solid #333;
     }
 
-    h2 { color: #4CAF50; margin-top: 0; }
+    h2 { color: #4CAF50; margin-bottom: 20px; font-size: 1.2rem; }
 
-    .estado { margin: 15px 0; font-size: 14px; color: #aaa; }
+    /* CONTENEDOR VÚMETRO LATERAL */
+    .vu-lateral-container {
+        background: #000;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        border: 1px solid #222;
+    }
+
+    .vu-row {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+    }
+
+    .vu-label {
+        width: 30px;
+        font-size: 12px;
+        font-weight: bold;
+        color: #888;
+        text-align: left;
+    }
+
+    .vu-track {
+        flex-grow: 1;
+        height: 12px;
+        background: #1a1a1a;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-left: 10px;
+        position: relative;
+    }
+
+    .vu-fill {
+        height: 100%;
+        width: 0%; /* Controlado por JS */
+        background: linear-gradient(to right, #4CAF50 50%, #FFEB3B 80%, #F44336 100%);
+        box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
+        transition: width 0.05s ease-out;
+    }
 
     .id-box {
         background: #000;
-        padding: 12px;
+        padding: 10px;
         border-radius: 6px;
-        margin-bottom: 20px;
-        border: 1px dashed #444;
         font-family: monospace;
         color: #00ff00;
-        word-break: break-all;
+        font-size: 12px;
+        margin-bottom: 15px;
     }
 
-    /* ESTILOS DEL VÚMETRO */
-    .vu-container {
-        display: flex;
-        justify-content: space-around;
-        background: #000;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 20px 0;
-        gap: 10px;
-    }
-
-    .vu-meter {
-        width: 45%;
-        height: 150px;
-        background: #222;
-        position: relative;
-        border-radius: 4px;
-        overflow: hidden;
-    }
-
-    .vu-bar {
-        position: absolute;
-        bottom: 0;
-        width: 100%;
-        background: linear-gradient(to top, #4CAF50 60%, #FFEB3B 80%, #F44336 100%);
-        height: 0%; /* Se controla con JS */
-        transition: height 0.05s ease;
-    }
-
-    .vu-label { font-size: 10px; color: #666; margin-top: 5px; }
-
-    .onair {
-        margin-top: 15px;
-        font-weight: bold;
-        color: #f44336;
-        display: none;
-    }
+    .onair { color: #f44336; font-weight: bold; display: none; margin-top: 10px; }
 </style>
 </head>
 
@@ -88,21 +90,20 @@
 <div class="card">
     <h2>Receptor Stereo HD</h2>
 
-    <div class="estado">ID DEL RECEPTOR</div>
-    <div id="mi-id" class="id-box">Conectando…</div>
+    <div class="id-box" id="mi-id">Conectando...</div>
 
-    <div class="vu-container">
-        <div>
-            <div class="vu-meter"><div id="bar-L" class="vu-bar"></div></div>
-            <div class="vu-label">LEFT</div>
+    <div class="vu-lateral-container">
+        <div class="vu-row">
+            <span class="vu-label">L</span>
+            <div class="vu-track"><div id="bar-L" class="vu-fill"></div></div>
         </div>
-        <div>
-            <div class="vu-meter"><div id="bar-R" class="vu-bar"></div></div>
-            <div class="vu-label">RIGHT</div>
+        <div class="vu-row">
+            <span class="vu-label">R</span>
+            <div class="vu-track"><div id="bar-R" class="vu-fill"></div></div>
         </div>
     </div>
 
-    <div id="estado" class="estado">🕓 Esperando señal…</div>
+    <div id="estado" style="font-size: 13px; color: #aaa;">🕓 Esperando señal…</div>
     <audio id="audio" autoplay playsinline></audio>
     <div id="onair" class="onair">🔴 AL AIRE</div>
 </div>
@@ -119,78 +120,59 @@ const peer = new Peer({
 });
 
 const miId = document.getElementById("mi-id");
-const estado = document.getElementById("estado");
-const audio = document.getElementById("audio");
-const onair = document.getElementById("onair");
 const barL = document.getElementById("bar-L");
 const barR = document.getElementById("bar-R");
+const audio = document.getElementById("audio");
+const estado = document.getElementById("estado");
+const onair = document.getElementById("onair");
 
-let audioCtx, source, splitter, analyserL, analyserR;
+let audioCtx, analyserL, analyserR;
 
-function iniciarVumetro(stream) {
-    // Inicializar contexto de audio
+function iniciarAudioVisual(stream) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    source = audioCtx.createMediaStreamSource(stream);
+    const source = audioCtx.createMediaStreamSource(stream);
+    const splitter = audioCtx.createChannelSplitter(2);
     
-    // Crear splitters y analizadores
-    splitter = audioCtx.createChannelSplitter(2);
     analyserL = audioCtx.createAnalyser();
     analyserR = audioCtx.createAnalyser();
-
-    // Conectar: Source -> Splitter -> Analizadores
+    
     source.connect(splitter);
-    splitter.connect(analyserL, 0); // Canal 0 a Analizador L
-    splitter.connect(analyserR, 1); // Canal 1 a Analizador R
-
-    analyserL.fftSize = 256;
-    analyserR.fftSize = 256;
+    splitter.connect(analyserL, 0);
+    splitter.connect(analyserR, 1);
 
     const dataL = new Uint8Array(analyserL.frequencyBinCount);
     const dataR = new Uint8Array(analyserR.frequencyBinCount);
 
-    function dibujar() {
+    function loop() {
         analyserL.getByteFrequencyData(dataL);
         analyserR.getByteFrequencyData(dataR);
 
-        // Calcular promedio de volumen
-        let volL = dataL.reduce((a, b) => a + b) / dataL.length;
-        let volR = dataR.reduce((a, b) => a + b) / dataR.length;
+        // Promedio de volumen
+        let vL = dataL.reduce((a, b) => a + b) / dataL.length;
+        let vR = dataR.reduce((a, b) => a + b) / dataR.length;
 
-        // Escalar a porcentaje (ajustar el multiplicador según sensibilidad deseada)
-        barL.style.height = Math.min(volL * 1.5, 100) + "%";
-        barR.style.height = Math.min(volR * 1.5, 100) + "%";
+        // Ajustar el factor (1.8) para mayor o menor sensibilidad
+        barL.style.width = Math.min(vL * 1.8, 100) + "%";
+        barR.style.width = Math.min(vR * 1.8, 100) + "%";
 
-        requestAnimationFrame(dibujar);
+        requestAnimationFrame(loop);
     }
-    dibujar();
+    loop();
 }
 
 peer.on("open", id => { miId.textContent = id; });
 
 peer.on("call", call => {
-    estado.textContent = "📡 Recibiendo señal…";
     call.answer();
-
     call.on("stream", stream => {
         audio.srcObject = stream;
-        audio.play().catch(()=>{});
-        estado.textContent = "🎧 Audio recibido";
+        audio.play();
+        estado.textContent = "🎧 Señal Activa";
         onair.style.display = "block";
-        
-        // Arrancar el vúmetro con el stream recibido
-        if (!audioCtx) iniciarVumetro(stream);
+        if (!audioCtx) iniciarAudioVisual(stream);
     });
-
-    call.on("close", () => {
-        estado.textContent = "🕓 Esperando señal…";
-        onair.style.display = "none";
-    });
-});
-
-peer.on("error", err => {
-    console.error(err);
-    estado.textContent = "❌ Error de conexión";
 });
 </script>
+
 </body>
 </html>
