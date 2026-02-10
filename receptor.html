@@ -2,84 +2,110 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>🎙️ CENTRAL STEREO HD</title>
+    <title>🎧 RECEPTOR STEREO HD</title>
     <style>
-        body { background: #0a0a0a; color: #00ff00; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .monitor { background: #111; border: 2px solid #333; border-radius: 15px; padding: 25px; width: 450px; box-shadow: 0 0 30px rgba(0,0,0,0.5); border-top: 4px solid #00ff00; }
-        #id-display { font-size: 22px; background: #000; padding: 15px; margin: 15px 0; border: 1px dashed #444; color: #fff; text-align: center; border-radius: 8px; }
-        
-        /* Estilos del Vúmetro de 2 vías */
-        .vu-label { font-size: 10px; color: #888; margin-bottom: 5px; }
-        .vu-container { height: 20px; background: #000; border-radius: 3px; margin: 5px 0 15px 0; position: relative; overflow: hidden; border: 1px solid #222; }
-        .vu-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #00ff00 60%, #ffff00 80%, #ff0000 100%); transition: width 0.05s; }
-        
-        .status { font-size: 14px; margin-bottom: 20px; text-align: center; color: #aaa; }
-        button { background: #00ff00; color: #000; border: none; padding: 15px; font-weight: bold; cursor: pointer; width: 100%; border-radius: 5px; font-size: 16px; }
-        button:active { transform: scale(0.98); }
-        #log { font-size: 10px; color: #444; margin-top: 15px; height: 40px; overflow: hidden; }
+        body { background: #050505; color: #00ff00; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .monitor { background: #111; border: 2px solid #333; border-radius: 15px; padding: 25px; width: 420px; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+        .id-box { font-size: 24px; background: #000; padding: 15px; margin: 15px 0; border: 1px solid #00ff00; color: #fff; border-radius: 8px; min-height: 30px; }
+        .vu-container { height: 15px; background: #000; border-radius: 10px; margin: 5px 0 15px 0; overflow: hidden; border: 1px solid #222; }
+        .vu-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000); transition: width 0.05s; }
+        button { background: #00ff00; color: #000; border: none; padding: 15px; font-weight: bold; cursor: pointer; width: 100%; border-radius: 5px; font-size: 14px; }
+        #status { color: #888; font-size: 12px; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div class="monitor">
-        <h2 style="margin:0; text-align: center;">📻 CENTRAL DE RECEPCIÓN</h2>
+        <h2 style="color: #fff; margin: 0 0 10px 0;">📻 CENTRAL HD</h2>
         
-        <div id="id-display">CONECTANDO...</div>
-        <div class="status" id="info">Esperando conexión de PeerJS...</div>
-        
-        <div class="vu-label">CANAL IZQUIERDO (L)</div>
+        <div class="id-box" id="mi-id">CONECTANDO...</div>
+        <div id="status">Iniciando conexión...</div>
+
+        <div style="text-align: left; font-size: 10px; margin-top: 15px; color: #666;">L - CANAL IZQUIERDO</div>
         <div class="vu-container"><div id="vu-l" class="vu-bar"></div></div>
         
-        <div class="vu-label">CANAL DERECHO (R)</div>
+        <div style="text-align: left; font-size: 10px; color: #666;">R - CANAL DERECHO</div>
         <div class="vu-container"><div id="vu-r" class="vu-bar"></div></div>
 
-        <button id="btn-audio" onclick="iniciarAudio()">🔓 ACTIVAR MONITOR</button>
-        
-        <div id="log">Iniciando sistema...</div>
+        <button onclick="activarYReconectar()">🔓 ACTIVAR Y FORZAR ID</button>
     </div>
 
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
     <script>
+        let peer;
         let audioCtx;
-        const info = document.getElementById('info');
-        const log = (t) => document.getElementById('log').innerText = t;
 
-        // 1. Configurar PeerJS
-        const peer = new Peer();
+        function crearPeer() {
+            // Intentamos conectar con una configuración más robusta
+            peer = new Peer({
+                host: '0.peerjs.com',
+                port: 443,
+                path: '/',
+                secure: true,
+                debug: 3
+            });
 
-        peer.on('open', id => {
-            document.getElementById('id-display').innerText = id;
-            info.innerText = "🟢 LISTO PARA RECIBIR";
-            log("Conectado al servidor de señalización.");
-        });
+            peer.on('open', (id) => {
+                document.getElementById('mi-id').innerText = id;
+                document.getElementById('status').innerText = "🟢 LISTO: Pegá este ID en el celular";
+            });
 
-        // 2. Función para desbloquear el audio (Click obligatorio)
-        function iniciarAudio() {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            document.getElementById('btn-audio').style.background = "#222";
-            document.getElementById('btn-audio').style.color = "#00ff00";
-            document.getElementById('btn-audio').innerText = "🔊 MONITOREO ACTIVO";
-            log("Audio Context activado.");
+            peer.on('call', (call) => {
+                document.getElementById('status').innerText = "📡 RECIBIENDO AUDIO...";
+                call.answer(); 
+                
+                call.on('stream', (stream) => {
+                    const audio = new Audio();
+                    audio.srcObject = stream;
+                    audio.play();
+                    iniciarVumetro(stream);
+                });
+            });
+
+            peer.on('error', (err) => {
+                console.error(err);
+                document.getElementById('mi-id').innerText = "REINTENTANDO...";
+                document.getElementById('status').innerText = "❌ Error: " + err.type;
+                // Si falla, reintenta en 3 segundos
+                setTimeout(crearPeer, 3000);
+            });
         }
 
-        // 3. Recibir la llamada
-        peer.on('call', call => {
-            log("Llamada entrante detectada...");
-            call.answer(); 
+        function iniciarVumetro(stream) {
+            if (!audioCtx) audioCtx = new AudioContext();
+            const source = audioCtx.createMediaStreamSource(stream);
+            const splitter = audioCtx.createChannelSplitter(2);
+            const anaL = audioCtx.createAnalyser();
+            const anaR = audioCtx.createAnalyser();
 
-            call.on('stream', remoteStream => {
-                info.innerText = "🔴 EN EL AIRE";
-                info.style.color = "#ff0000";
-                
-                // Reproducción
-                const audio = new Audio();
-                audio.srcObject = remoteStream;
-                audio.play().catch(e => log("Error: Haz clic en el botón verde primero."));
+            source.connect(splitter);
+            splitter.connect(anaL, 0);
+            splitter.connect(anaR, 1);
 
-                // Lógica del Vúmetro Estéreo (2 vías)
-                if(!audioCtx) audioCtx = new AudioContext();
-                const source = audioCtx.createMediaStreamSource(remoteStream);
-                
-                // Separador de canales
-                const splitter = audioCtx.createChannel
+            const dataL = new Uint8Array(anaL.frequencyBinCount);
+            const dataR = new Uint8Array(anaR.frequencyBinCount);
+
+            function update() {
+                anaL.getByteFrequencyData(dataL);
+                anaR.getByteFrequencyData(dataR);
+                let vL = dataL.reduce((a, b) => a + b, 0) / dataL.length;
+                let vR = dataR.reduce((a, b) => a + b, 0) / dataR.length;
+                document.getElementById('vu-l').style.width = (vL * 2.5) + "%";
+                document.getElementById('vu-r').style.width = (vR * 2.5) + "%";
+                requestAnimationFrame(update);
+            }
+            update();
+        }
+
+        function activarYReconectar() {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (peer) peer.destroy();
+            crearPeer();
+        }
+
+        // Iniciar al cargar
+        crearPeer();
+    </script>
+</body>
+</html>
 
 
