@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Receptor HD - Radio</title>
+<title>Receptor HD - Radio con Vúmetro</title>
 
 <style>
     body {
@@ -28,16 +28,9 @@
         border: 1px solid #333;
     }
 
-    h2 {
-        color: #4CAF50;
-        margin-top: 0;
-    }
+    h2 { color: #4CAF50; margin-top: 0; }
 
-    .estado {
-        margin: 20px 0;
-        font-size: 14px;
-        color: #aaa;
-    }
+    .estado { margin: 15px 0; font-size: 14px; color: #aaa; }
 
     .id-box {
         background: #000;
@@ -50,10 +43,36 @@
         word-break: break-all;
     }
 
-    audio {
-        width: 100%;
-        margin-top: 15px;
+    /* ESTILOS DEL VÚMETRO */
+    .vu-container {
+        display: flex;
+        justify-content: space-around;
+        background: #000;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 20px 0;
+        gap: 10px;
     }
+
+    .vu-meter {
+        width: 45%;
+        height: 150px;
+        background: #222;
+        position: relative;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .vu-bar {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        background: linear-gradient(to top, #4CAF50 60%, #FFEB3B 80%, #F44336 100%);
+        height: 0%; /* Se controla con JS */
+        transition: height 0.05s ease;
+    }
+
+    .vu-label { font-size: 10px; color: #666; margin-top: 5px; }
 
     .onair {
         margin-top: 15px;
@@ -72,28 +91,29 @@
     <div class="estado">ID DEL RECEPTOR</div>
     <div id="mi-id" class="id-box">Conectando…</div>
 
+    <div class="vu-container">
+        <div>
+            <div class="vu-meter"><div id="bar-L" class="vu-bar"></div></div>
+            <div class="vu-label">LEFT</div>
+        </div>
+        <div>
+            <div class="vu-meter"><div id="bar-R" class="vu-bar"></div></div>
+            <div class="vu-label">RIGHT</div>
+        </div>
+    </div>
+
     <div id="estado" class="estado">🕓 Esperando señal…</div>
-
     <audio id="audio" autoplay playsinline></audio>
-
     <div id="onair" class="onair">🔴 AL AIRE</div>
 </div>
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script>
-/* ===============================
-   PEERJS CON STUN + TURN
-   (OBLIGATORIO PARA DATOS)
-================================ */
 const peer = new Peer({
   config: {
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
-      {
-        urls: "turn:openrelay.metered.ca:443",
-        username: "openrelayproject",
-        credential: "openrelayproject"
-      }
+      { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" }
     ]
   }
 });
@@ -102,13 +122,51 @@ const miId = document.getElementById("mi-id");
 const estado = document.getElementById("estado");
 const audio = document.getElementById("audio");
 const onair = document.getElementById("onair");
+const barL = document.getElementById("bar-L");
+const barR = document.getElementById("bar-R");
 
-/* ID listo */
-peer.on("open", id => {
-    miId.textContent = id;
-});
+let audioCtx, source, splitter, analyserL, analyserR;
 
-/* Cuando entra una llamada */
+function iniciarVumetro(stream) {
+    // Inicializar contexto de audio
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    source = audioCtx.createMediaStreamSource(stream);
+    
+    // Crear splitters y analizadores
+    splitter = audioCtx.createChannelSplitter(2);
+    analyserL = audioCtx.createAnalyser();
+    analyserR = audioCtx.createAnalyser();
+
+    // Conectar: Source -> Splitter -> Analizadores
+    source.connect(splitter);
+    splitter.connect(analyserL, 0); // Canal 0 a Analizador L
+    splitter.connect(analyserR, 1); // Canal 1 a Analizador R
+
+    analyserL.fftSize = 256;
+    analyserR.fftSize = 256;
+
+    const dataL = new Uint8Array(analyserL.frequencyBinCount);
+    const dataR = new Uint8Array(analyserR.frequencyBinCount);
+
+    function dibujar() {
+        analyserL.getByteFrequencyData(dataL);
+        analyserR.getByteFrequencyData(dataR);
+
+        // Calcular promedio de volumen
+        let volL = dataL.reduce((a, b) => a + b) / dataL.length;
+        let volR = dataR.reduce((a, b) => a + b) / dataR.length;
+
+        // Escalar a porcentaje (ajustar el multiplicador según sensibilidad deseada)
+        barL.style.height = Math.min(volL * 1.5, 100) + "%";
+        barR.style.height = Math.min(volR * 1.5, 100) + "%";
+
+        requestAnimationFrame(dibujar);
+    }
+    dibujar();
+}
+
+peer.on("open", id => { miId.textContent = id; });
+
 peer.on("call", call => {
     estado.textContent = "📡 Recibiendo señal…";
     call.answer();
@@ -118,6 +176,9 @@ peer.on("call", call => {
         audio.play().catch(()=>{});
         estado.textContent = "🎧 Audio recibido";
         onair.style.display = "block";
+        
+        // Arrancar el vúmetro con el stream recibido
+        if (!audioCtx) iniciarVumetro(stream);
     });
 
     call.on("close", () => {
@@ -126,12 +187,10 @@ peer.on("call", call => {
     });
 });
 
-/* Debug útil */
 peer.on("error", err => {
     console.error(err);
     estado.textContent = "❌ Error de conexión";
 });
 </script>
-
 </body>
 </html>
