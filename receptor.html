@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CENTRAL HD - DUPLEX</title>
+    <style>
+        body{background:#0a0a0a; color:#0f0; font-family:monospace; text-align:center; padding:20px;}
+        .vumetro{width:200px; height:10px; background:#222; margin:5px auto; overflow:hidden; border-radius:5px;}
+        .bar{height:100%; width:0%; background:#0f0; transition:0.1s;}
+    </style>
+</head>
+<body>
+    <h2>🎙️ CENTRAL HD (2 VÍAS)</h2>
+    <p>ID: <strong id="mi-id">RADIO-PRUEBA-123</strong></p>
+    <button id="btn-iniciar" onclick="iniciar()" style="padding:15px; background:#0f0; font-weight:bold; cursor:pointer;">1. ACTIVAR MIC Y CONECTAR</button>
+    
+    <div style="margin-top:20px;">
+        <small>NIVEL DE ENTRADA (CELULAR)</small>
+        <div class="vumetro"><div id="bar-in" class="bar"></div></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+    <script>
+        let localStream;
+        const peer = new Peer('RADIO-PRUEBA-123');
+
+        async function iniciar() {
+            // Capturamos mic de la PC para mandar de vuelta
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } 
+            });
+            document.getElementById('btn-iniciar').style.background = "#222";
+            document.getElementById('btn-iniciar').innerText = "ESPERANDO LLAMADA...";
+        }
+
+        peer.on('call', call => {
+            // Al contestar, mandamos nuestro localStream (el mic de la PC)
+            call.answer(localStream); 
+            
+            call.on('stream', remoteStream => {
+                const audio = new Audio();
+                audio.srcObject = remoteStream;
+                audio.play();
+                visualizar(remoteStream);
+            });
+        });
+
+        function visualizar(stream) {
+            const ctx = new AudioContext();
+            const src = ctx.createMediaStreamSource(stream);
+            const ana = ctx.createAnalyser();
+            src.connect(ana);
+            const data = new Uint8Array(ana.frequencyBinCount);
+            const draw = () => {
+                ana.getByteFrequencyData(data);
+                document.getElementById('bar-in').style.width = (data[0]/2.5) + "%";
+                requestAnimationFrame(draw);
+            };
+            draw();
+        }
+    </script>
+</body>
+</html>
