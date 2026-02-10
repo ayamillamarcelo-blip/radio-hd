@@ -1,54 +1,37 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMISOR ULTRA-LOW LATENCY</title>
-    <style>
-        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
-        .btn { background: #00ff00; color: #000; padding: 30px; width: 100%; border-radius: 20px; font-weight: bold; border: none; font-size: 20px; }
-        #status { margin-top: 30px; font-size: 18px; color: #0f0; }
-    </style>
+    <title>📱 CELULAR HD</title>
 </head>
-<body>
-    <h2>📱 LLAMADA HD</h2>
-    <button class="btn" onclick="iniciarLlamada()">🔴 INICIAR TRANSMISIÓN</button>
-    <div id="status">Listo para conectar</div>
+<body style="background:#000; color:#fff; text-align:center; font-family:sans-serif;">
+    <h3>📱 LLAMADA HD</h3>
+    <button onclick="llamar()" style="padding:25px; background:#00ff00; width:90%; border-radius:15px; font-weight:bold;">🔴 INICIAR LLAMADA</button>
+    <p id="status">Listo</p>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
-<script>
-    async function iniciarLlamada() {
-        const status = document.getElementById('status');
-        status.innerText = "Abriendo micrófono...";
-
-        try {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+    <script>
+        async function llamar() {
+            const status = document.getElementById('status');
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0 } 
+                audio: { echoCancellation: true, noiseSuppression: true } 
             });
-
-            const peer = new Peer({
-                config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] }
-            });
-
+            
+            const peer = new Peer();
             peer.on('open', () => {
-                status.innerText = "Llamando a la Central...";
                 const call = peer.call('RADIO-PRUEBA-123', stream);
+                status.innerText = "Llamando...";
 
+                // RECIBIR EL AUDIO DE LA PC
                 call.on('stream', remoteStream => {
-                    status.innerText = "🔴 CONECTADO - TIEMPO REAL";
-                    // AudioContext para menor latencia en móvil
-                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
-                    const source = audioCtx.createMediaStreamSource(remoteStream);
-                    source.connect(audioCtx.destination);
+                    status.innerText = "🔴 EN COMUNICACIÓN";
+                    const audio = new Audio();
+                    audio.srcObject = remoteStream;
+                    audio.play();
                 });
             });
-
-            peer.on('error', err => alert("Error: " + err.type));
-
-        } catch (e) {
-            alert("Error de micrófono: " + e);
         }
-    }
-</script>
+    </script>
 </body>
 </html>
+
