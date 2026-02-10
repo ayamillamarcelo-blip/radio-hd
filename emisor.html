@@ -3,83 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎙️ EMISOR STEREO HD - 4G READY</title>
+    <title>📱 EMISOR 4G</title>
     <style>
-        body { background:#121212; color:#eee; font-family: sans-serif; display:flex; justify-content:center; padding:20px; }
-        .card { background:#1e1e1e; padding:20px; border-radius:15px; width:100%; max-width:400px; border:1px solid #333; text-align:center; }
-        h2 { color:#4CAF50; }
-        select, input, button { width:100%; padding:15px; margin:10px 0; border-radius:10px; border:none; box-sizing:border-box; }
-        button { background:#4CAF50; color:white; font-weight:bold; cursor:pointer; font-size:16px; }
-        .vu-container { height:15px; background:#000; border-radius:5px; margin:10px 0; overflow:hidden; display:flex; }
-        .vu-bar { width:0%; height:100%; background:#4CAF50; transition: width 0.1s; }
-        #status { font-size:12px; color:#888; margin-top:10px; }
+        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
+        .box { border: 2px solid #00ff00; border-radius: 15px; padding: 20px; }
+        input { width: 90%; padding: 15px; margin: 10px 0; border-radius: 10px; border: none; font-size: 16px; }
+        button { background: #00ff00; color: #000; padding: 20px; width: 100%; border-radius: 10px; font-weight: bold; border: none; font-size: 18px; }
+        #status { margin-top: 20px; color: #00ff00; font-weight: bold; }
     </style>
 </head>
 <body>
-<div class="card">
-    <h2>📻 EMISOR MÓVIL</h2>
-    <label style="font-size:12px;">MICRO / LÍNEA:</label>
-    <select id="lista-dispositivos"></select>
-    <div class="vu-container"><div id="vu-bar" class="vu-bar"></div></div>
-    <input type="text" id="id-receptor" placeholder="ID de la Central">
-    <button onclick="iniciar()">🚀 TRANSMITIR EN HD</button>
-    <div id="status">Esperando conexión...</div>
-</div>
+    <div class="box">
+        <h2>📡 TRANSMISOR 4G</h2>
+        <p>ID de la Central a llamar:</p>
+        <input type="text" id="id-destino" value="RADIO-ESTUDIO-1">
+        <button onclick="transmitir()">🔴 TRANSMITIR AHORA</button>
+        <div id="status">Listo para salir al aire</div>
+    </div>
 
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
 <script>
-    const iceConfig = {
-        config: {
-            iceServers: [
-                { urls: "stun:stun1.l.google.com:19302" },
-                { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", password: "openrelayproject" }
-            ]
-        }
-    };
+    let peer;
+    const config = { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }, { 'urls': 'stun:stun1.l.google.com:19302' }] };
 
-    const peer = new Peer(iceConfig);
-    let localStream;
+    function transmitir() {
+        const idDestino = document.getElementById('id-destino').value;
+        document.getElementById('status').innerText = "Iniciando micrófono...";
 
-    peer.on('open', id => document.getElementById('status').innerText = "Tu ID: " + id);
+        navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        .then(stream => {
+            peer = new Peer({ config: config });
+            
+            peer.on('open', () => {
+                document.getElementById('status').innerText = "Conectando con Central...";
+                const call = peer.call(idDestino, stream);
+                
+                call.on('stream', () => {
+                    document.getElementById('status').innerText = "🔴 TRANSMITIENDO EN VIVO";
+                });
+            });
 
-    async function init() {
-        const devs = await navigator.mediaDevices.enumerateDevices();
-        const select = document.getElementById('lista-dispositivos');
-        devs.filter(d => d.kind === 'audioinput').forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.deviceId;
-            opt.text = d.label || "Micrófono";
-            select.appendChild(opt);
-        });
+            peer.on('error', err => {
+                alert("Error: " + err.type);
+                document.getElementById('status').innerText = "Error de conexión";
+            });
+        })
+        .catch(err => alert("Error de micrófono: " + err));
     }
-
-    async function iniciar() {
-        const deviceId = document.getElementById('lista-dispositivos').value;
-        localStream = await navigator.mediaDevices.getUserMedia({
-            audio: { deviceId: {exact: deviceId}, echoCancellation:false, noiseSuppression:false, autoGainControl:false }
-        });
-
-        // Visualizador básico
-        const ctx = new AudioContext();
-        const src = ctx.createMediaStreamSource(localStream);
-        const ans = ctx.createAnalyser();
-        src.connect(ans);
-        const data = new Uint8Array(ans.frequencyBinCount);
-        const update = () => {
-            ans.getByteFrequencyData(data);
-            let v = data.reduce((a,b)=>a+b,0)/data.length;
-            document.getElementById('vu-bar').style.width = (v*2)+"%";
-            requestAnimationFrame(update);
-        };
-        update();
-
-        const idDestino = document.getElementById('id-receptor').value;
-        const call = peer.call(idDestino, localStream, {
-            sdpTransform: sdp => sdp.replace('useinbandfec=1', 'useinbandfec=1; maxaveragebitrate=256000; stereo=1')
-        });
-        document.getElementById('status').innerText = "📡 TRANSMITIENDO...";
-    }
-    init();
 </script>
 </body>
 </html>
+
