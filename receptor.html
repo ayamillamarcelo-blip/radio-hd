@@ -2,73 +2,84 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>🎧 CENTRAL DE RECEPCIÓN HD</title>
+    <title>🎙️ CENTRAL STEREO HD</title>
     <style>
-        body { background:#0a0a0a; color:#00ff00; font-family:monospace; padding:40px; text-align:center; }
-        .monitor { background:#111; border:2px solid #00ff00; border-radius:15px; padding:30px; display:inline-block; min-width: 320px; }
-        #id-display { font-size:20px; background:#000; padding:15px; margin:20px 0; border:1px dashed #00ff00; color: #fff; word-break: break-all; }
-        .status-ready { color: #00ff00; font-weight: bold; }
-        .status-error { color: #ff0000; font-weight: bold; }
+        body { background: #0a0a0a; color: #00ff00; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .monitor { background: #111; border: 2px solid #333; border-radius: 15px; padding: 25px; width: 450px; box-shadow: 0 0 30px rgba(0,0,0,0.5); border-top: 4px solid #00ff00; }
+        #id-display { font-size: 22px; background: #000; padding: 15px; margin: 15px 0; border: 1px dashed #444; color: #fff; text-align: center; border-radius: 8px; }
+        
+        /* Estilos del Vúmetro de 2 vías */
+        .vu-label { font-size: 10px; color: #888; margin-bottom: 5px; }
+        .vu-container { height: 20px; background: #000; border-radius: 3px; margin: 5px 0 15px 0; position: relative; overflow: hidden; border: 1px solid #222; }
+        .vu-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #00ff00 60%, #ffff00 80%, #ff0000 100%); transition: width 0.05s; }
+        
+        .status { font-size: 14px; margin-bottom: 20px; text-align: center; color: #aaa; }
+        button { background: #00ff00; color: #000; border: none; padding: 15px; font-weight: bold; cursor: pointer; width: 100%; border-radius: 5px; font-size: 16px; }
+        button:active { transform: scale(0.98); }
+        #log { font-size: 10px; color: #444; margin-top: 15px; height: 40px; overflow: hidden; }
     </style>
 </head>
 <body>
     <div class="monitor">
-        <h2>📻 CENTRAL DE RADIO</h2>
-        <div id="id-display">ESPERANDO AL SERVIDOR...</div>
-        <div id="info">Iniciando sistema...</div>
+        <h2 style="margin:0; text-align: center;">📻 CENTRAL DE RECEPCIÓN</h2>
         
-        <div style="margin-top:20px; text-align: left;">
-            <p>1. Copia el ID de arriba.</p>
-            <p>2. Pégalo en el Celular (Emisor).</p>
-            <p>3. Dale a Transmitir.</p>
-        </div>
+        <div id="id-display">CONECTANDO...</div>
+        <div class="status" id="info">Esperando conexión de PeerJS...</div>
+        
+        <div class="vu-label">CANAL IZQUIERDO (L)</div>
+        <div class="vu-container"><div id="vu-l" class="vu-bar"></div></div>
+        
+        <div class="vu-label">CANAL DERECHO (R)</div>
+        <div class="vu-container"><div id="vu-r" class="vu-bar"></div></div>
+
+        <button id="btn-audio" onclick="iniciarAudio()">🔓 ACTIVAR MONITOR</button>
+        
+        <div id="log">Iniciando sistema...</div>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    
     <script>
-        const idDisplay = document.getElementById('id-display');
+        let audioCtx;
         const info = document.getElementById('info');
+        const log = (t) => document.getElementById('log').innerText = t;
 
-        // Configuración con servidores para saltar bloqueos
-        const peer = new Peer({
-            config: {
-                iceServers: [
-                    { urls: "stun:stun1.l.google.com:19302" },
-                    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", password: "openrelayproject" }
-                ]
-            }
+        // 1. Configurar PeerJS
+        const peer = new Peer();
+
+        peer.on('open', id => {
+            document.getElementById('id-display').innerText = id;
+            info.innerText = "🟢 LISTO PARA RECIBIR";
+            log("Conectado al servidor de señalización.");
         });
 
-        // Evento cuando el servidor nos asigna un ID
-        peer.on('open', (id) => {
-            console.log('ID recibido:', id);
-            idDisplay.innerText = id;
-            info.innerHTML = '<span class="status-ready">🟢 SISTEMA LISTO</span>';
-        });
+        // 2. Función para desbloquear el audio (Click obligatorio)
+        function iniciarAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            document.getElementById('btn-audio').style.background = "#222";
+            document.getElementById('btn-audio').style.color = "#00ff00";
+            document.getElementById('btn-audio').innerText = "🔊 MONITOREO ACTIVO";
+            log("Audio Context activado.");
+        }
 
-        // Evento por si hay error de conexión al servidor
-        peer.on('error', (err) => {
-            console.error(err);
-            idDisplay.innerText = "ERROR DE RED";
-            info.innerHTML = `<span class="status-error">❌ ${err.type}</span>`;
-        });
+        // 3. Recibir la llamada
+        peer.on('call', call => {
+            log("Llamada entrante detectada...");
+            call.answer(); 
 
-        // Evento cuando entra una llamada
-        peer.on('call', (call) => {
-            info.innerText = "📡 RECIBIENDO SEÑAL...";
-            call.answer(); // Contestamos
-            
-            call.on('stream', (remoteStream) => {
+            call.on('stream', remoteStream => {
+                info.innerText = "🔴 EN EL AIRE";
+                info.style.color = "#ff0000";
+                
+                // Reproducción
                 const audio = new Audio();
                 audio.srcObject = remoteStream;
-                audio.play().catch(e => {
-                    info.innerHTML = '<button onclick="location.reload()">Haga clic aquí para habilitar audio</button>';
-                });
-                info.innerText = "🔊 EN VIVO";
-            });
-        });
-    </script>
-</body>
-</html>
+                audio.play().catch(e => log("Error: Haz clic en el botón verde primero."));
+
+                // Lógica del Vúmetro Estéreo (2 vías)
+                if(!audioCtx) audioCtx = new AudioContext();
+                const source = audioCtx.createMediaStreamSource(remoteStream);
+                
+                // Separador de canales
+                const splitter = audioCtx.createChannel
+
 
