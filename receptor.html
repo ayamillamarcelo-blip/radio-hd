@@ -2,30 +2,32 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>📻 CENTRAL DE RADIO (RECEPTOR)</title>
+    <title>📻 CENTRAL DE RADIO - RECEPTOR</title>
     <style>
         body { background: #050505; color: #00ff00; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .monitor { background: #111; border: 2px solid #333; padding: 25px; border-radius: 15px; width: 380px; text-align: center; border-top: 4px solid #00ff00; }
-        input { width: 100%; padding: 10px; margin: 10px 0; background: #000; border: 1px solid #444; color: #fff; text-align: center; font-size: 18px; }
+        .id-label { font-size: 12px; color: #888; margin-bottom: 5px; text-align: left; }
+        input { width: 100%; padding: 12px; margin: 5px 0 15px 0; background: #000; border: 1px solid #00ff00; color: #fff; text-align: center; font-size: 18px; border-radius: 5px; }
         .vu-container { background: #000; height: 15px; margin: 5px 0 15px 0; border: 1px solid #222; position: relative; overflow: hidden; }
         .vu-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #0f0 70%, #ff0 85%, #f00 100%); transition: width 0.05s; }
-        button { background: #00ff00; color: #000; border: none; padding: 15px; font-weight: bold; width: 100%; cursor: pointer; border-radius: 5px; }
-        #status { font-size: 12px; margin-top: 15px; color: #888; }
+        button { background: #00ff00; color: #000; border: none; padding: 15px; font-weight: bold; width: 100%; cursor: pointer; border-radius: 5px; font-size: 16px; }
+        #status { font-size: 12px; margin-top: 15px; color: #aaa; padding: 10px; border-radius: 5px; background: #222; }
     </style>
 </head>
 <body>
     <div class="monitor">
-        <h2 style="margin:0">🎙️ CENTRAL PC</h2>
-        <input type="text" id="id-receptor" value="RADIO-ESTUDIO-1">
-        <button onclick="conectarCentral()">🌐 1. CONECTAR CENTRAL</button>
+        <h2 style="margin:0 0 20px 0">🎙️ CENTRAL DE ESTUDIO</h2>
         
-        <div style="text-align:left; font-size:10px; margin-top:15px; color:#555;">CANAL IZQUIERDO (L)</div>
+        <div class="id-label">ID DE ESTA CENTRAL (Cópialo al celular):</div>
+        <input type="text" id="id-receptor" value="RADIO-RECEPTOR-01">
+        
+        <button id="btn-conectar" onclick="conectarCentral()">🌐 CONECTAR CENTRAL</button>
+        
+        <div style="text-align:left; font-size:10px; margin-top:20px; color:#555;">CANAL L / CANAL R</div>
         <div class="vu-container"><div id="vu-l" class="vu-bar"></div></div>
-        
-        <div style="text-align:left; font-size:10px; color:#555;">CANAL DERECHO (R)</div>
         <div class="vu-container"><div id="vu-r" class="vu-bar"></div></div>
         
-        <div id="status">Paso 1: Dale a Conectar</div>
+        <div id="status">Paso 1: Dale a "Conectar Central"</div>
     </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
@@ -33,4 +35,72 @@
     let peer, audioCtx;
     const config = { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }, { 'urls': 'stun:stun1.l.google.com:19302' }] };
 
-    function
+    function conectarCentral() {
+        const idIngresado = document.getElementById('id-receptor').value.trim();
+        
+        // Si el campo está vacío, no hace nada
+        if(!idIngresado) {
+            alert("Por favor, escribe un nombre para tu radio.");
+            return;
+        }
+
+        // Intentar conectar con el ID que escribiste
+        peer = new Peer(idIngresado, { config: config, debug: 3 });
+
+        peer.on('open', (id) => {
+            document.getElementById('status').innerText = "🟢 CONECTADO: Tu ID es " + id;
+            document.getElementById('status').style.color = "#00ff00";
+            document.getElementById('id-receptor').disabled = true;
+            document.getElementById('btn-conectar').innerText = "ESPERANDO AUDIO...";
+            document.getElementById('btn-conectar').style.background = "#222";
+            document.getElementById('btn-conectar').style.color = "#00ff00";
+            
+            // Preparamos el motor de audio
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        });
+
+        peer.on('call', call => {
+            document.getElementById('status').innerText = "📡 RECIBIENDO SEÑAL...";
+            call.answer();
+            call.on('stream', stream => {
+                const audio = new Audio();
+                audio.srcObject = stream;
+                audio.play();
+                document.getElementById('status').innerText = "🔴 TRANSMITIENDO EN VIVO";
+                document.getElementById('status').style.background = "#400";
+                iniciarVu(stream);
+            });
+        });
+
+        peer.on('error', err => {
+            if(err.type === 'unavailable-id') {
+                document.getElementById('status').innerText = "❌ ERROR: El ID ya está en uso.";
+            } else {
+                document.getElementById('status').innerText = "❌ ERROR: " + err.type;
+            }
+        });
+    }
+
+    function iniciarVu(stream) {
+        if(!audioCtx) audioCtx = new AudioContext();
+        const src = audioCtx.createMediaStreamSource(stream);
+        const split = audioCtx.createChannelSplitter(2);
+        const anL = audioCtx.createAnalyser();
+        const anR = audioCtx.createAnalyser();
+        src.connect(split);
+        split.connect(anL, 0);
+        split.connect(anR, 1);
+        const d = new Uint8Array(anL.frequencyBinCount);
+        const up = () => {
+            anL.getByteFrequencyData(d);
+            document.getElementById('vu-l').style.width = (d[0]/2.5) + "%";
+            anR.getByteFrequencyData(d);
+            document.getElementById('vu-r').style.width = (d[0]/2.5) + "%";
+            requestAnimationFrame(up);
+        };
+        up();
+    }
+</script>
+</body>
+</html>
+
