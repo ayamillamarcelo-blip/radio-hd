@@ -2,109 +2,115 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>🎧 RECEPTOR STEREO HD</title>
+    <title>🎧 CENTRAL DE RADIO HD</title>
     <style>
         body { background: #050505; color: #00ff00; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .monitor { background: #111; border: 2px solid #333; border-radius: 15px; padding: 25px; width: 420px; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
-        .id-box { font-size: 24px; background: #000; padding: 15px; margin: 15px 0; border: 1px solid #00ff00; color: #fff; border-radius: 8px; min-height: 30px; }
-        .vu-container { height: 15px; background: #000; border-radius: 10px; margin: 5px 0 15px 0; overflow: hidden; border: 1px solid #222; }
-        .vu-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000); transition: width 0.05s; }
-        button { background: #00ff00; color: #000; border: none; padding: 15px; font-weight: bold; cursor: pointer; width: 100%; border-radius: 5px; font-size: 14px; }
-        #status { color: #888; font-size: 12px; margin-top: 10px; }
+        .monitor { background: #111; border: 2px solid #333; border-radius: 15px; padding: 25px; width: 400px; box-shadow: 0 0 30px rgba(0,255,0,0.1); border-top: 4px solid #00ff00; }
+        
+        input { width: 100%; padding: 12px; margin: 10px 0; background: #000; border: 1px solid #444; color: #fff; border-radius: 5px; box-sizing: border-box; font-size: 16px; text-align: center; }
+        
+        .vu-label { font-size: 10px; color: #666; margin: 10px 0 2px 0; }
+        .vu-container { height: 15px; background: #000; border-radius: 3px; overflow: hidden; border: 1px solid #222; }
+        .vu-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #00ff00 70%, #ffff00 85%, #ff0000 100%); transition: width 0.05s; }
+        
+        button { background: #00ff00; color: #000; border: none; padding: 15px; font-weight: bold; cursor: pointer; width: 100%; border-radius: 5px; margin-top: 20px; }
+        #status { font-size: 12px; margin-top: 15px; color: #888; text-align: center; }
     </style>
 </head>
 <body>
-    <div class="monitor">
-        <h2 style="color: #fff; margin: 0 0 10px 0;">📻 CENTRAL HD</h2>
+
+<div class="monitor">
+    <h2 style="margin:0; text-align: center;">📻 CENTRAL PC</h2>
+    
+    <label style="font-size: 12px; color: #aaa;">ID DE ESTA CENTRAL:</label>
+    <input type="text" id="input-id" value="RADIO-CENTRAL-1">
+    
+    <button id="btn-conectar" onclick="conectar()">🌐 1. CONECTAR CENTRAL</button>
+
+    <div class="vu-label">CANAL L</div>
+    <div class="vu-container"><div id="vu-l" class="vu-bar"></div></div>
+    
+    <div class="vu-label">CANAL R</div>
+    <div class="vu-container"><div id="vu-r" class="vu-bar"></div></div>
+
+    <div id="status">Paso 1: Poné un nombre y conectá.</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<script>
+    let peer;
+    let audioCtx;
+
+    function conectar() {
+        const idDeseado = document.getElementById('input-id').value;
         
-        <div class="id-box" id="mi-id">CONECTANDO...</div>
-        <div id="status">Iniciando conexión...</div>
+        // Creamos el peer con el ID que escribiste
+        peer = new Peer(idDeseado, {
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            secure: true
+        });
 
-        <div style="text-align: left; font-size: 10px; margin-top: 15px; color: #666;">L - CANAL IZQUIERDO</div>
-        <div class="vu-container"><div id="vu-l" class="vu-bar"></div></div>
-        
-        <div style="text-align: left; font-size: 10px; color: #666;">R - CANAL DERECHO</div>
-        <div class="vu-container"><div id="vu-r" class="vu-bar"></div></div>
+        peer.on('open', (id) => {
+            document.getElementById('status').innerText = "🟢 CENTRAL ACTIVA: " + id;
+            document.getElementById('status').style.color = "#00ff00";
+            document.getElementById('btn-conectar').disabled = true;
+            document.getElementById('btn-conectar').innerText = "ESPERANDO AUDIO...";
+            
+            // Iniciamos AudioContext para que el navegador esté listo
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        });
 
-        <button onclick="activarYReconectar()">🔓 ACTIVAR Y FORZAR ID</button>
-    </div>
+        peer.on('call', (call) => {
+            document.getElementById('status').innerText = "📡 RECIBIENDO SEÑAL...";
+            call.answer(); 
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
-    <script>
-        let peer;
-        let audioCtx;
-
-        function crearPeer() {
-            // Intentamos conectar con una configuración más robusta
-            peer = new Peer({
-                host: '0.peerjs.com',
-                port: 443,
-                path: '/',
-                secure: true,
-                debug: 3
+            call.on('stream', (stream) => {
+                const audio = new Audio();
+                audio.srcObject = stream;
+                audio.play();
+                document.getElementById('status').innerText = "🔴 EN EL AIRE";
+                iniciarVumetro(stream);
             });
+        });
 
-            peer.on('open', (id) => {
-                document.getElementById('mi-id').innerText = id;
-                document.getElementById('status').innerText = "🟢 LISTO: Pegá este ID en el celular";
-            });
-
-            peer.on('call', (call) => {
-                document.getElementById('status').innerText = "📡 RECIBIENDO AUDIO...";
-                call.answer(); 
-                
-                call.on('stream', (stream) => {
-                    const audio = new Audio();
-                    audio.srcObject = stream;
-                    audio.play();
-                    iniciarVumetro(stream);
-                });
-            });
-
-            peer.on('error', (err) => {
-                console.error(err);
-                document.getElementById('mi-id').innerText = "REINTENTANDO...";
-                document.getElementById('status').innerText = "❌ Error: " + err.type;
-                // Si falla, reintenta en 3 segundos
-                setTimeout(crearPeer, 3000);
-            });
-        }
-
-        function iniciarVumetro(stream) {
-            if (!audioCtx) audioCtx = new AudioContext();
-            const source = audioCtx.createMediaStreamSource(stream);
-            const splitter = audioCtx.createChannelSplitter(2);
-            const anaL = audioCtx.createAnalyser();
-            const anaR = audioCtx.createAnalyser();
-
-            source.connect(splitter);
-            splitter.connect(anaL, 0);
-            splitter.connect(anaR, 1);
-
-            const dataL = new Uint8Array(anaL.frequencyBinCount);
-            const dataR = new Uint8Array(anaR.frequencyBinCount);
-
-            function update() {
-                anaL.getByteFrequencyData(dataL);
-                anaR.getByteFrequencyData(dataR);
-                let vL = dataL.reduce((a, b) => a + b, 0) / dataL.length;
-                let vR = dataR.reduce((a, b) => a + b, 0) / dataR.length;
-                document.getElementById('vu-l').style.width = (vL * 2.5) + "%";
-                document.getElementById('vu-r').style.width = (vR * 2.5) + "%";
-                requestAnimationFrame(update);
+        peer.on('error', (err) => {
+            if(err.type === 'unavailable-id') {
+                alert("Ese nombre ya lo usa alguien. Cambialo!");
+            } else {
+                alert("Error: " + err.type);
             }
-            update();
-        }
+        });
+    }
 
-        function activarYReconectar() {
-            if (!audioCtx) audioCtx = new AudioContext();
-            if (peer) peer.destroy();
-            crearPeer();
-        }
+    function iniciarVumetro(stream) {
+        if(!audioCtx) audioCtx = new AudioContext();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const splitter = audioCtx.createChannelSplitter(2);
+        const anaL = audioCtx.createAnalyser();
+        const anaR = audioCtx.createAnalyser();
 
-        // Iniciar al cargar
-        crearPeer();
-    </script>
+        source.connect(splitter);
+        splitter.connect(anaL, 0);
+        splitter.connect(anaR, 1);
+
+        const data = new Uint8Array(anaL.frequencyBinCount);
+        const update = () => {
+            anaL.getByteFrequencyData(data);
+            let vL = data.reduce((a,b)=>a+b,0)/data.length;
+            document.getElementById('vu-l').style.width = (vL * 2.5) + "%";
+            
+            anaR.getByteFrequencyData(data);
+            let vR = data.reduce((a,b)=>a+b,0)/data.length;
+            document.getElementById('vu-r').style.width = (vR * 2.5) + "%";
+            
+            requestAnimationFrame(update);
+        };
+        update();
+    }
+</script>
+
 </body>
 </html>
 
