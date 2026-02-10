@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📱 CELULAR HD</title>
+</head>
+<body style="background:#000; color:#fff; text-align:center; font-family:sans-serif;">
+    <h3>📱 LLAMADA HD</h3>
+    <button onclick="llamar()" style="padding:25px; background:#00ff00; width:90%; border-radius:15px; font-weight:bold;">🔴 INICIAR LLAMADA</button>
+    <p id="status">Listo</p>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+    <script>
+        async function llamar() {
+            const status = document.getElementById('status');
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: true, noiseSuppression: true } 
+            });
+            
+            const peer = new Peer();
+            peer.on('open', () => {
+                const call = peer.call('RADIO-PRUEBA-123', stream);
+                status.innerText = "Llamando...";
+
+                // RECIBIR EL AUDIO DE LA PC
+                call.on('stream', remoteStream => {
+                    status.innerText = "🔴 EN COMUNICACIÓN";
+                    const audio = new Audio();
+                    audio.srcObject = remoteStream;
+                    audio.play();
+                });
+            });
+        }
+    </script>
+</body>
+</html>
