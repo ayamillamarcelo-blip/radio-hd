@@ -1,63 +1,143 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Emisor HD 44.1</title>
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<title>Emisor HD Pro - Stereo Edition</title>
 <style>
-body{background:#111;color:white;font-family:Arial;text-align:center}
-button{padding:15px 30px;font-size:18px;margin-top:20px}
-#vu{width:300px;height:20px;background:#333;margin:20px auto}
-#bar{height:100%;width:0%;background:lime}
+body { 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    padding: 20px; 
+    background: #121212; 
+    color: #e0e0e0; 
+    display: flex; 
+    justify-content: center; 
+}
+.card { 
+    background: #1e1e1e; 
+    padding: 25px; 
+    border-radius: 15px; 
+    width: 100%; 
+    max-width: 450px; 
+}
+h2 { color: #4CAF50; text-align: center; }
+select, button { 
+    margin: 10px 0; 
+    padding: 12px; 
+    width: 100%; 
+    border-radius: 8px; 
+    border: none; 
+    font-size: 14px; 
+}
+button { background:#4CAF50;color:white;font-weight:bold;cursor:pointer; }
+.vu-container { margin:15px 0; }
+.vu-meter-bg { height:12px;background:#000;border-radius:3px;overflow:hidden;margin-bottom:5px; }
+.vu-bar { width:0%;height:100%;background:#4CAF50;transition:width 0.05s; }
 </style>
 </head>
 <body>
 
-<h2>🎙 EMISOR HD 44.1</h2>
-<div id="vu"><div id="bar"></div></div>
-<button onclick="iniciar()">Transmitir</button>
+<div class="card">
+<h2>Transmisor Stereo HD</h2>
 
+<select id="lista-dispositivos" onchange="cambiarEntrada()"></select>
+
+<div class="vu-container">
+<div class="vu-meter-bg"><div id="vu-L" class="vu-bar"></div></div>
+<div class="vu-meter-bg"><div id="vu-R" class="vu-bar"></div></div>
+</div>
+
+<button onclick="iniciarTransmision()">🚀 Iniciar Transmisión HD</button>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script>
+
+const EMISOR_ID   = "fmcolor_emisor_hd";
+const RECEPTOR_ID = "fmcolor_receptor_hd";
+
+const peer = new Peer(EMISOR_ID);
+
+const selector = document.getElementById('lista-dispositivos');
+const barL = document.getElementById('vu-L');
+const barR = document.getElementById('vu-R');
+
 let localStream;
-let audioContext;
-let analyser;
-let dataArray;
+let audioCtx;
 
-const peer = new Peer("fm_emisor_44100");
+async function inicializar() {
+    const temp = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const devices = await navigator.mediaDevices.enumerateDevices();
 
-navigator.mediaDevices.getUserMedia({
-    audio: {
-        sampleRate: 44100,
-        channelCount: 2,
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
+    selector.innerHTML="";
+    devices.filter(d=>d.kind==="audioinput").forEach(d=>{
+        const opt=document.createElement("option");
+        opt.value=d.deviceId;
+        opt.text=d.label||"Entrada";
+        selector.appendChild(opt);
+    });
+
+    temp.getTracks().forEach(t=>t.stop());
+    obtenerStream();
+}
+
+async function obtenerStream(){
+    if(localStream) localStream.getTracks().forEach(t=>t.stop());
+
+    localStream = await navigator.mediaDevices.getUserMedia({
+        audio:{
+            deviceId: selector.value ? { exact: selector.value } : undefined,
+            channelCount:2,
+            sampleRate:44100,
+            echoCancellation:false,
+            noiseSuppression:false,
+            autoGainControl:false
+        }
+    });
+
+    activarVU(localStream);
+}
+
+function cambiarEntrada(){ obtenerStream(); }
+
+function activarVU(stream){
+    audioCtx = new AudioContext({sampleRate:44100});
+    const source = audioCtx.createMediaStreamSource(stream);
+    const splitter = audioCtx.createChannelSplitter(2);
+    source.connect(splitter);
+
+    const analyserL = audioCtx.createAnalyser();
+    const analyserR = audioCtx.createAnalyser();
+    splitter.connect(analyserL,0);
+    splitter.connect(analyserR,1);
+
+    const dataL=new Uint8Array(analyserL.frequencyBinCount);
+    const dataR=new Uint8Array(analyserR.frequencyBinCount);
+
+    function loop(){
+        analyserL.getByteFrequencyData(dataL);
+        analyserR.getByteFrequencyData(dataR);
+        const vol=d=>Math.min((d.reduce((a,b)=>a+b,0)/d.length)*1.8,100);
+        barL.style.width=vol(dataL)+"%";
+        barR.style.width=vol(dataR)+"%";
+        requestAnimationFrame(loop);
     }
-}).then(stream=>{
-    localStream = stream;
-
-    audioContext = new AudioContext({sampleRate:44100});
-    const source = audioContext.createMediaStreamSource(stream);
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    source.connect(analyser);
-    dataArray = new Uint8Array(analyser.frequencyBinCount);
-    vu();
-});
-
-function vu(){
-    analyser.getByteFrequencyData(dataArray);
-    let sum = dataArray.reduce((a,b)=>a+b,0);
-    let avg = sum/dataArray.length;
-    document.getElementById("bar").style.width = avg+"%";
-    requestAnimationFrame(vu);
+    loop();
 }
 
-function iniciar(){
-    peer.call("fm_receptor_44100", localStream);
+function iniciarTransmision(){
+    peer.call(RECEPTOR_ID, localStream, {
+        sdpTransform:sdp=>sdp.replace(
+            'useinbandfec=1',
+            'useinbandfec=1; stereo=1; sprop-stereo=1; maxaveragebitrate=256000'
+        )
+    });
+    alert("🚀 Transmitiendo HD");
 }
+
+inicializar();
+
 </script>
-
 </body>
 </html>
+
 
