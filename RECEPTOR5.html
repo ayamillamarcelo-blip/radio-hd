@@ -1,54 +1,77 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Receptor HD 44.1</title>
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<title>Receptor HD</title>
 <style>
-body{background:#000;color:white;font-family:Arial;text-align:center}
-#vu{width:300px;height:20px;background:#333;margin:20px auto}
-#bar{height:100%;width:0%;background:red}
+body{background:#0e0e0e;color:#e0e0e0;font-family:Arial;text-align:center}
+.card{background:#1b1b1b;padding:25px;border-radius:15px;max-width:450px;margin:auto;margin-top:40px}
+.vu-track{height:12px;background:#1a1a1a;border-radius:6px;overflow:hidden;margin:8px 0}
+.vu-fill{height:100%;width:0%;background:linear-gradient(to right,#4CAF50,#F44336);transition:width 0.05s}
 </style>
 </head>
 <body>
 
-<h2>📻 RECEPTOR HD 44.1</h2>
-<div id="vu"><div id="bar"></div></div>
+<div class="card">
+<h2>Receptor Stereo HD</h2>
+<div id="estado">🕓 Esperando señal…</div>
+
+<div class="vu-track"><div id="bar-L" class="vu-fill"></div></div>
+<div class="vu-track"><div id="bar-R" class="vu-fill"></div></div>
+
 <audio id="audio" autoplay playsinline></audio>
+</div>
 
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script>
-let audioContext;
-let analyser;
-let dataArray;
 
-const peer = new Peer("fm_receptor_44100");
+const RECEPTOR_ID="fmcolor_receptor_hd";
+const peer=new Peer(RECEPTOR_ID);
 
-peer.on("call", call=>{
+const barL=document.getElementById("bar-L");
+const barR=document.getElementById("bar-R");
+const estado=document.getElementById("estado");
+const audio=document.getElementById("audio");
+
+let audioCtx;
+
+peer.on("open",()=>estado.textContent="🟢 Esperando emisor...");
+
+peer.on("call",call=>{
     call.answer();
-    call.on("stream", stream=>{
-        const audio = document.getElementById("audio");
-        audio.srcObject = stream;
-        audio.play();
-
-        audioContext = new AudioContext({sampleRate:44100});
-        const source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-        vu();
+    call.on("stream",stream=>{
+        audio.srcObject=stream;
+        estado.textContent="🎧 Señal HD Activa";
+        iniciarVU(stream);
     });
 });
 
-function vu(){
-    analyser.getByteFrequencyData(dataArray);
-    let sum = dataArray.reduce((a,b)=>a+b,0);
-    let avg = sum/dataArray.length;
-    document.getElementById("bar").style.width = avg+"%";
-    requestAnimationFrame(vu);
-}
-</script>
+function iniciarVU(stream){
+    audioCtx=new AudioContext({sampleRate:44100});
+    const source=audioCtx.createMediaStreamSource(stream);
+    const splitter=audioCtx.createChannelSplitter(2);
+    source.connect(splitter);
 
+    const analyserL=audioCtx.createAnalyser();
+    const analyserR=audioCtx.createAnalyser();
+    splitter.connect(analyserL,0);
+    splitter.connect(analyserR,1);
+
+    const dataL=new Uint8Array(analyserL.frequencyBinCount);
+    const dataR=new Uint8Array(analyserR.frequencyBinCount);
+
+    function loop(){
+        analyserL.getByteFrequencyData(dataL);
+        analyserR.getByteFrequencyData(dataR);
+        const vol=d=>Math.min((d.reduce((a,b)=>a+b,0)/d.length)*1.8,100);
+        barL.style.width=vol(dataL)+"%";
+        barR.style.width=vol(dataR)+"%";
+        requestAnimationFrame(loop);
+    }
+    loop();
+}
+
+</script>
 </body>
 </html>
 
