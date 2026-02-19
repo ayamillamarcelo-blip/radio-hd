@@ -2,19 +2,25 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Emisor HD PRO Stereo</title>
+<title>Emisor HD PRO Line In Stereo</title>
 <style>
 body{background:#0e0e0e;color:#e0e0e0;font-family:Arial;text-align:center}
 .card{background:#1b1b1b;padding:25px;border-radius:15px;max-width:500px;margin:auto;margin-top:40px}
 .estado{margin:10px 0}
-button{padding:10px 20px;border:none;border-radius:8px;background:#4CAF50;color:white;font-size:16px;cursor:pointer}
+button{padding:10px 20px;border:none;border-radius:8px;background:#4CAF50;color:white;font-size:16px;cursor:pointer;margin-top:10px}
+.vu-track{height:14px;background:#111;border-radius:6px;overflow:hidden;margin:6px 0}
+.vu-fill{height:100%;width:0%;background:linear-gradient(to right,#4CAF50,#F44336);transition:width 0.05s}
 </style>
 </head>
 <body>
 
 <div class="card">
-<h2>🎙 Emisor HD Stereo</h2>
+<h2>🎚 Emisor HD – Line In Stereo</h2>
 <div id="estado" class="estado">🕓 Iniciando...</div>
+
+<div class="vu-track"><div id="bar-L" class="vu-fill"></div></div>
+<div class="vu-track"><div id="bar-R" class="vu-fill"></div></div>
+
 <button onclick="reiniciar()">Reiniciar conexión</button>
 </div>
 
@@ -26,15 +32,33 @@ const RECEPTOR_ID="fmcolor_receptor_hd";
 let peer;
 let streamGlobal;
 let llamada;
+let audioCtx;
 
 const estado=document.getElementById("estado");
+const barL=document.getElementById("bar-L");
+const barR=document.getElementById("bar-R");
 
-async function iniciarMic(){
+async function obtenerLinea(){
+
+    const dispositivos = await navigator.mediaDevices.enumerateDevices();
+
+    const linea = dispositivos.find(d =>
+        d.kind === "audioinput" &&
+        d.label.toLowerCase().includes("line")
+    );
+
+    return linea ? linea.deviceId : null;
+}
+
+async function iniciarLinea(){
 
     try{
 
+        const deviceId = await obtenerLinea();
+
         const stream = await navigator.mediaDevices.getUserMedia({
             audio:{
+                deviceId: deviceId ? { exact: deviceId } : undefined,
                 channelCount:2,
                 sampleRate:44100,
                 sampleSize:16,
@@ -46,19 +70,53 @@ async function iniciarMic(){
 
         streamGlobal = stream;
 
-        estado.textContent="🎙 Micrófono activo (Stereo)";
+        estado.textContent="🎚 Line In Activa (Stereo Real)";
+        iniciarVU(stream);
         crearPeer();
 
     }catch(e){
-        estado.textContent="❌ Debes permitir el micrófono";
+        estado.textContent="❌ Permiso o Line In no disponible";
     }
+}
+
+function iniciarVU(stream){
+
+    audioCtx = new AudioContext({ sampleRate:44100 });
+
+    const source = audioCtx.createMediaStreamSource(stream);
+    const splitter = audioCtx.createChannelSplitter(2);
+
+    const analyserL = audioCtx.createAnalyser();
+    const analyserR = audioCtx.createAnalyser();
+
+    source.connect(splitter);
+
+    splitter.connect(analyserL,0);
+    splitter.connect(analyserR,1);
+
+    const dataL=new Uint8Array(analyserL.frequencyBinCount);
+    const dataR=new Uint8Array(analyserR.frequencyBinCount);
+
+    function loop(){
+        analyserL.getByteFrequencyData(dataL);
+        analyserR.getByteFrequencyData(dataR);
+
+        const vol=d=>Math.min((d.reduce((a,b)=>a+b,0)/d.length)*1.8,100);
+
+        barL.style.width=vol(dataL)+"%";
+        barR.style.width=vol(dataR)+"%";
+
+        requestAnimationFrame(loop);
+    }
+
+    loop();
 }
 
 function crearPeer(){
 
     peer = new Peer();
 
-    peer.on("open",id=>{
+    peer.on("open",()=>{
         estado.textContent="📡 Conectando al receptor...";
         llamar();
     });
@@ -80,7 +138,7 @@ function llamar(){
     llamada = peer.call(RECEPTOR_ID, streamGlobal);
 
     llamada.on("stream",()=>{
-        estado.textContent="📻 Transmitiendo en Stereo HD";
+        estado.textContent="📻 Transmitiendo Stereo HD";
     });
 
     llamada.on("close",()=>{
@@ -98,10 +156,12 @@ function reiniciar(){
     crearPeer();
 }
 
-window.onload = iniciarMic;
+window.onload = iniciarLinea;
 
 </script>
 </body>
 </html>
+
+
 
 
