@@ -19,8 +19,6 @@ body{background:#0e0e0e;color:#e0e0e0;font-family:Arial;text-align:center}
 
 <div class="vu-track"><div id="bar-L" class="vu-fill"></div></div>
 <div class="vu-track"><div id="bar-R" class="vu-fill"></div></div>
-
-<audio id="audio" autoplay playsinline></audio>
 </div>
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -32,7 +30,6 @@ let peer;
 let audioCtx;
 
 const estado=document.getElementById("estado");
-const audio=document.getElementById("audio");
 const barL=document.getElementById("bar-L");
 const barR=document.getElementById("bar-R");
 
@@ -47,9 +44,8 @@ function crearPeer(){
         call.answer();
 
         call.on("stream",stream=>{
-            estado.textContent="🎧 Señal HD Activa";
-            audio.srcObject=stream;
-            iniciarVU(stream);
+            estado.textContent="🎧 Señal HD Activa (Stereo)";
+            iniciarAudio(stream);
         });
 
         call.on("close",()=>estado.textContent="⚠ Señal perdida...");
@@ -69,16 +65,37 @@ function reconectarPeer(){
     }
 }
 
-function iniciarVU(stream){
+function iniciarAudio(stream){
+
+    if(audioCtx){
+        audioCtx.close();
+    }
+
     audioCtx=new AudioContext({sampleRate:44100});
+
     const source=audioCtx.createMediaStreamSource(stream);
     const splitter=audioCtx.createChannelSplitter(2);
-    source.connect(splitter);
+    const merger=audioCtx.createChannelMerger(2);
 
     const analyserL=audioCtx.createAnalyser();
     const analyserR=audioCtx.createAnalyser();
+
+    source.connect(splitter);
+
+    // Canal izquierdo
+    splitter.connect(merger,0,0);
     splitter.connect(analyserL,0);
+
+    // Canal derecho
+    splitter.connect(merger,1,1);
     splitter.connect(analyserR,1);
+
+    merger.connect(audioCtx.destination);
+
+    iniciarVU(analyserL,analyserR);
+}
+
+function iniciarVU(analyserL,analyserR){
 
     const dataL=new Uint8Array(analyserL.frequencyBinCount);
     const dataR=new Uint8Array(analyserR.frequencyBinCount);
@@ -86,9 +103,12 @@ function iniciarVU(stream){
     function loop(){
         analyserL.getByteFrequencyData(dataL);
         analyserR.getByteFrequencyData(dataR);
+
         const vol=d=>Math.min((d.reduce((a,b)=>a+b,0)/d.length)*1.8,100);
+
         barL.style.width=vol(dataL)+"%";
         barR.style.width=vol(dataR)+"%";
+
         requestAnimationFrame(loop);
     }
     loop();
@@ -96,7 +116,16 @@ function iniciarVU(stream){
 
 crearPeer();
 
+// Para desbloquear audio en Chrome si lo bloquea
+document.body.addEventListener("click",()=>{
+    if(audioCtx && audioCtx.state==="suspended"){
+        audioCtx.resume();
+    }
+});
+
 </script>
 </body>
 </html>
+
+
 
