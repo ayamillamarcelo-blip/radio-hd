@@ -2,140 +2,106 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Emisor HD PRO</title>
+<title>Emisor HD PRO Stereo</title>
 <style>
-body{background:#121212;color:#e0e0e0;font-family:Arial;text-align:center}
-.card{background:#1e1e1e;padding:25px;border-radius:15px;max-width:500px;margin:auto;margin-top:40px}
-button{padding:12px;width:100%;border:none;border-radius:8px;background:#4CAF50;color:white;font-weight:bold;cursor:pointer}
+body{background:#0e0e0e;color:#e0e0e0;font-family:Arial;text-align:center}
+.card{background:#1b1b1b;padding:25px;border-radius:15px;max-width:500px;margin:auto;margin-top:40px}
 .estado{margin:10px 0}
-.vu-track{height:14px;background:#111;border-radius:6px;overflow:hidden;margin:6px 0}
-.vu-fill{height:100%;width:0%;background:linear-gradient(to right,#4CAF50,#F44336);transition:width 0.05s}
+button{padding:10px 20px;border:none;border-radius:8px;background:#4CAF50;color:white;font-size:16px;cursor:pointer}
 </style>
 </head>
 <body>
 
 <div class="card">
-<h2>🎙 Transmisor Stereo HD</h2>
-<div class="estado" id="estado">🕓 Esperando...</div>
-
-<div class="vu-track"><div id="vu-L" class="vu-fill"></div></div>
-<div class="vu-track"><div id="vu-R" class="vu-fill"></div></div>
-
-<button onclick="iniciar()">🚀 Iniciar Transmisión</button>
+<h2>🎙 Emisor HD Stereo</h2>
+<div id="estado" class="estado">🕓 Iniciando...</div>
+<button onclick="reiniciar()">Reiniciar conexión</button>
 </div>
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script>
 
-const EMISOR_ID="fmcolor_emisor_hd";
 const RECEPTOR_ID="fmcolor_receptor_hd";
 
 let peer;
-let currentCall=null;
-let localStream=null;
-let heartbeat=null;
-let audioCtx;
+let streamGlobal;
+let llamada;
 
 const estado=document.getElementById("estado");
-const vuL=document.getElementById("vu-L");
-const vuR=document.getElementById("vu-R");
 
-async function iniciar(){
-    localStream=await navigator.mediaDevices.getUserMedia({
-        audio:{
-            channelCount:2,
-            sampleRate:44100,
-            echoCancellation:false,
-            noiseSuppression:false,
-            autoGainControl:false
-        }
-    });
+async function iniciarMic(){
 
-    iniciarVU(localStream);
-    crearPeer();
+    try{
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio:{
+                channelCount:2,
+                sampleRate:44100,
+                sampleSize:16,
+                echoCancellation:false,
+                noiseSuppression:false,
+                autoGainControl:false
+            }
+        });
+
+        streamGlobal = stream;
+
+        estado.textContent="🎙 Micrófono activo (Stereo)";
+        crearPeer();
+
+    }catch(e){
+        estado.textContent="❌ Debes permitir el micrófono";
+    }
 }
 
 function crearPeer(){
-    peer=new Peer(EMISOR_ID);
 
-    peer.on("open",()=>{
-        estado.textContent="🟢 Conectado al servidor";
+    peer = new Peer();
+
+    peer.on("open",id=>{
+        estado.textContent="📡 Conectando al receptor...";
         llamar();
     });
 
-    peer.on("disconnected",reconectarPeer);
-    peer.on("error",()=>setTimeout(reconectarPeer,2000));
-}
-
-function reconectarPeer(){
-    estado.textContent="🔄 Reconectando servidor...";
-    if(peer && !peer.destroyed){
+    peer.on("disconnected",()=>{
+        estado.textContent="🔄 Reconectando servidor...";
         peer.reconnect();
-    }else{
-        crearPeer();
-    }
+    });
+
+    peer.on("error",()=>{
+        setTimeout(()=>crearPeer(),2000);
+    });
 }
 
 function llamar(){
-    estado.textContent="📡 Intentando conectar...";
-    currentCall=peer.call(RECEPTOR_ID,localStream);
 
-    currentCall.on("stream",()=>{
-        estado.textContent="🎧 Transmitiendo HD";
-        iniciarHeartbeat();
+    if(!streamGlobal) return;
+
+    llamada = peer.call(RECEPTOR_ID, streamGlobal);
+
+    llamada.on("stream",()=>{
+        estado.textContent="📻 Transmitiendo en Stereo HD";
     });
 
-    currentCall.on("close",reconectarCall);
-    currentCall.on("error",reconectarCall);
+    llamada.on("close",()=>{
+        estado.textContent="⚠ Señal perdida... reconectando";
+        setTimeout(()=>llamar(),2000);
+    });
+
+    llamada.on("error",()=>{
+        setTimeout(()=>llamar(),2000);
+    });
 }
 
-function reconectarCall(){
-    estado.textContent="⚠ Señal perdida. Reintentando...";
-    detenerHeartbeat();
-    setTimeout(llamar,3000);
+function reiniciar(){
+    if(peer) peer.destroy();
+    crearPeer();
 }
 
-function iniciarHeartbeat(){
-    detenerHeartbeat();
-    heartbeat=setInterval(()=>{
-        if(!currentCall || currentCall.open===false){
-            reconectarCall();
-        }
-    },3000);
-}
-
-function detenerHeartbeat(){
-    if(heartbeat){
-        clearInterval(heartbeat);
-        heartbeat=null;
-    }
-}
-
-function iniciarVU(stream){
-    audioCtx=new AudioContext({sampleRate:44100});
-    const source=audioCtx.createMediaStreamSource(stream);
-    const splitter=audioCtx.createChannelSplitter(2);
-    source.connect(splitter);
-
-    const analyserL=audioCtx.createAnalyser();
-    const analyserR=audioCtx.createAnalyser();
-    splitter.connect(analyserL,0);
-    splitter.connect(analyserR,1);
-
-    const dataL=new Uint8Array(analyserL.frequencyBinCount);
-    const dataR=new Uint8Array(analyserR.frequencyBinCount);
-
-    function loop(){
-        analyserL.getByteFrequencyData(dataL);
-        analyserR.getByteFrequencyData(dataR);
-        const vol=d=>Math.min((d.reduce((a,b)=>a+b,0)/d.length)*1.8,100);
-        vuL.style.width=vol(dataL)+"%";
-        vuR.style.width=vol(dataR)+"%";
-        requestAnimationFrame(loop);
-    }
-    loop();
-}
+window.onload = iniciarMic;
 
 </script>
 </body>
 </html>
+
+
